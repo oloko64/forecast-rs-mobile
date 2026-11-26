@@ -144,10 +144,16 @@ pub fn run() {
         .setup(|app| {
             let path = app.path().app_data_dir()?.join(config::FILE_NAME);
             // A broken config file should not brick the app: start fresh instead.
-            let config = Config::load_from(&path).unwrap_or_else(|e| {
+            let mut config = Config::load_from(&path).unwrap_or_else(|e| {
                 eprintln!("Ignoring config: {e:#}");
                 Config::default()
             });
+            // Save one-time default changes right away: the widget reads this file too.
+            if config.migrate()
+                && let Err(e) = config.save_to(&path)
+            {
+                eprintln!("Config not saved after migration: {e:#}");
+            }
             app.manage(Fallback::default());
             app.manage(ConfigStore {
                 path,

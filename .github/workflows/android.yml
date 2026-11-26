@@ -1,6 +1,6 @@
 # Builds a signed arm64 APK on every push to main (merged PRs included) and
-# publishes it as the rolling "latest" pre-release:
-#   https://github.com/<owner>/<repo>/releases/download/latest/forecast-arm64.apk
+# publishes it as the rolling "latest" pre-release, named after the app version:
+#   https://github.com/<owner>/<repo>/releases/tag/latest  →  forecast-<version>-arm64.apk
 #
 # Needs four repository secrets (Settings → Secrets and variables → Actions):
 #   ANDROID_KEYSTORE_BASE64    base64 of the release keystore (.jks)
@@ -117,6 +117,8 @@ jobs:
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          apk="forecast-$version-arm64.apk"
           bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           unsigned=src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
           echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
@@ -124,15 +126,16 @@ jobs:
           "$bt/apksigner" sign \
             --ks "$RUNNER_TEMP/release.jks" --ks-pass env:KS_PASS \
             --ks-key-alias "$ALIAS" --key-pass env:KEY_PASS \
-            --out forecast-arm64.apk "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" verify --print-certs forecast-arm64.apk | head -3
+            --out "$apk" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --print-certs "$apk" | head -3
           rm -f "$RUNNER_TEMP/release.jks"
-          echo "VERSION=$(jq -r .version src-tauri/tauri.conf.json)" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "APK=$apk" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v7
         with:
           name: forecast-${{ env.VERSION }}-arm64
-          path: forecast-arm64.apk
+          path: ${{ env.APK }}
           retention-days: 30
 
       - name: Publish rolling "latest" release
@@ -141,10 +144,10 @@ jobs:
         run: |
           set -euo pipefail
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest forecast-arm64.apk \
+          gh release create latest "$APK" \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Latest build · v$VERSION" \
             --notes "Built from ${GITHUB_SHA::7} on $(date -u '+%Y-%m-%d %H:%M UTC'). Android 7.0+, arm64.
 
-          Install \`forecast-arm64.apk\` on your phone; it updates over earlier builds from this workflow."
+          Install \`$APK\` on your phone; it updates over earlier builds from this workflow."

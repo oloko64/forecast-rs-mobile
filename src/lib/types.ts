@@ -59,6 +59,9 @@ export interface WidgetOptions {
   day_picker: boolean;
   refresh_button: boolean;
   rain: boolean;
+  clock: "off" | "small" | "big";
+  /** Background opacity in percent; 0 is fully transparent. */
+  background: number;
 }
 
 export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes" | "language" | "widget_refresh_minutes" | "widget">> & {

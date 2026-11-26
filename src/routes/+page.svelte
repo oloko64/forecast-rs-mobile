@@ -54,7 +54,16 @@
     resume_minutes: 30,
     language: "system",
     widget_refresh_minutes: 30,
-    widget: { location: true, now: true, summary: true, day_picker: true, refresh_button: true, rain: true },
+    widget: {
+      location: false,
+      now: true,
+      summary: false,
+      day_picker: true,
+      refresh_button: true,
+      rain: true,
+      clock: "big",
+      background: 100,
+    },
   });
   /** Landscape on a phone or wider: two columns (see `split`). */
   let wide = $state(false);

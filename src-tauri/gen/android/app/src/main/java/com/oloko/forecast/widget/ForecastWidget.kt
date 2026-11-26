@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.provider.AlarmClock
 import android.view.View
 import android.widget.RemoteViews
 import com.oloko.forecast.MainActivity
@@ -32,7 +33,7 @@ class ForecastWidget : AppWidgetProvider() {
   override fun onDisabled(context: Context) = RefreshWorker.cancel(context)
 
   override fun onDeleted(context: Context, ids: IntArray) {
-    prefs(context).edit().apply { ids.forEach { remove(dayKey(it)) } }.apply()
+    prefs(context).edit().apply { ids.forEach { remove(dayKey(it)); remove(dayKey(it) + "_at") } }.apply()
   }
 
   override fun onReceive(context: Context, intent: Intent) {
@@ -45,7 +46,10 @@ class ForecastWidget : AppWidgetProvider() {
         if (days.isEmpty()) return
         val current = selectedDate(context, id, forecast)
         val index = (days.indexOf(current) + if (intent.action == ACTION_NEXT) 1 else -1).coerceIn(0, days.size - 1)
-        prefs(context).edit().putString(dayKey(id), days[index]).apply()
+        prefs(context).edit()
+          .putString(dayKey(id), days[index])
+          .putLong(dayKey(id) + "_at", System.currentTimeMillis())
+          .apply()
         render(context, AppWidgetManager.getInstance(context), id)
       }
       ACTION_REFRESH -> {
@@ -63,6 +67,8 @@ class ForecastWidget : AppWidgetProvider() {
     private const val PREFS = "forecast_widget"
     const val KEY_REFRESHING = "refreshing"
     private const val KEY_SCHEDULED_MINUTES = "scheduled_minutes"
+    /** A day picked with the arrows returns to today after this long. */
+    private const val SELECTION_TTL_MS = 30 * 60 * 1000L
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun dayKey(id: Int) = "day_$id"
@@ -83,12 +89,15 @@ class ForecastWidget : AppWidgetProvider() {
 
     /**
      * The day shown by widget [id]: the one picked with the arrows if still in the
-     * forecast, else today. Without the arrows there is no way back, so always today.
+     * forecast and picked in the last 30 minutes, else today. Without the arrows
+     * there is no way back, so always today.
      */
     private fun selectedDate(context: Context, id: Int, forecast: Forecast): String {
       val dates = forecast.days.map { it.date }
       val arrows = Settings.load(context).show.dayPicker
-      val saved = if (arrows) prefs(context).getString(dayKey(id), null) else null
+      val pickedAt = prefs(context).getLong(dayKey(id) + "_at", 0)
+      val recent = System.currentTimeMillis() - pickedAt < SELECTION_TTL_MS
+      val saved = if (arrows && recent) prefs(context).getString(dayKey(id), null) else null
       val today = forecast.nowKey().take(10)
       return when {
         saved != null && saved in dates && saved >= today -> saved
@@ -100,11 +109,25 @@ class ForecastWidget : AppWidgetProvider() {
     private fun render(context: Context, manager: AppWidgetManager, id: Int) {
       val s = Settings.load(context)
       val forecast = Store.readForecast(context)
-      val views = RemoteViews(context.packageName, R.layout.widget_forecast)
+      val show = s.show
+      val layout = if (show.transparent) R.layout.widget_forecast_shadow else R.layout.widget_forecast
+      val views = RemoteViews(context.packageName, layout)
 
       views.setInt(R.id.bg, "setColorFilter", s.card)
-      listOf(R.id.now_temp, R.id.day).forEach { views.setTextColor(it, s.fg) }
-      listOf(R.id.location, R.id.summary).forEach { views.setTextColor(it, s.muted) }
+      views.setInt(R.id.bg, "setImageAlpha", show.background * 255 / 100)
+      listOf(R.id.now_temp, R.id.day, R.id.clock_small, R.id.clock_big).forEach { views.setTextColor(it, s.fg) }
+      listOf(R.id.location, R.id.summary, R.id.clock_date).forEach { views.setTextColor(it, s.muted) }
+
+      // Clock: off, small (inline) or big (time + date). Tapping it opens the clock app.
+      fun visible(on: Boolean) = if (on) View.VISIBLE else View.GONE
+      views.setViewVisibility(R.id.clock_small, visible(show.clock == "small"))
+      views.setViewVisibility(R.id.clock_big_block, visible(show.clock == "big"))
+      val alarms = PendingIntent.getActivity(
+        context, 1, Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+      )
+      views.setOnClickPendingIntent(R.id.clock_small, alarms)
+      views.setOnClickPendingIntent(R.id.clock_big_block, alarms)
       listOf(R.id.prev, R.id.next, R.id.refresh).forEach { views.setTextColor(it, s.accent) }
 
       val open = PendingIntent.getActivity(
@@ -134,15 +157,19 @@ class ForecastWidget : AppWidgetProvider() {
       }
 
       // Parts the user switched off in the app's widget settings.
-      val show = s.show
-      fun visible(on: Boolean) = if (on) View.VISIBLE else View.GONE
-      views.setViewVisibility(R.id.location, visible(show.location))
+      // On narrow widgets the header has no room for the name (it ended up as "…"):
+      // it moves to the start of the summary line instead.
+      val widthDp = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+      val narrow = widthDp in 1 until 300
+      val locationInHeader = show.location && !narrow
+      views.setViewVisibility(R.id.location, visible(locationInHeader))
       views.setViewVisibility(R.id.now_icon, visible(show.now))
       views.setViewVisibility(R.id.now_temp, visible(show.now))
       listOf(R.id.prev, R.id.day, R.id.next).forEach { views.setViewVisibility(it, visible(show.dayPicker)) }
       views.setViewVisibility(R.id.refresh, visible(show.refreshButton))
-      views.setViewVisibility(R.id.summary, visible(show.summary))
-      val headerShown = show.location || show.now || show.dayPicker || show.refreshButton
+      val locationInSummary = show.location && narrow
+      views.setViewVisibility(R.id.summary, visible(show.summary || locationInSummary))
+      val headerShown = show.location || show.now || show.dayPicker || show.refreshButton || show.clock != "off"
       views.setViewVisibility(R.id.header, visible(headerShown))
 
       val nowKey = forecast.nowKey()
@@ -160,8 +187,17 @@ class ForecastWidget : AppWidgetProvider() {
       views.setTextViewText(R.id.day, s.dayLabel(date, today))
       views.setTextViewText(
         R.id.summary,
-        "↑ ${s.tempUnit(day.max)}  ↓ ${s.tempUnit(day.min)}  ·  💧 ${s.mm(day.precipitation)} mm" +
-          (if (now != null && date == today) "  ·  ${s.weather(now.description)}" else ""),
+        if (narrow) {
+          // Compact: "Rio de Janeiro · ↑28° ↓20° · 6.8 mm"
+          listOfNotNull(
+            forecast.locationName.takeIf { show.location && it.isNotEmpty() },
+            "↑${s.temp(day.max)} ↓${s.temp(day.min)}".takeIf { show.summary },
+            "${s.mm(day.precipitation)} mm".takeIf { show.summary },
+          ).joinToString(" · ")
+        } else {
+          "↑ ${s.tempUnit(day.max)}  ↓ ${s.tempUnit(day.min)}  ·  💧 ${s.mm(day.precipitation)} mm" +
+            (if (now != null && date == today) "  ·  ${s.weather(now.description)}" else "")
+        },
       )
       // Dim an arrow at either end of the forecast.
       views.setTextColor(R.id.prev, if (dayIndex > 0) s.accent else s.line)
@@ -170,10 +206,11 @@ class ForecastWidget : AppWidgetProvider() {
       // Draw the chart at the widget's size (header ~52 dp + padding).
       val density = context.resources.displayMetrics.density
       val options = manager.getAppWidgetOptions(id)
-      val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 250
+      val chartWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 250
       val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 110
-      val chartW = ((widthDp - 20) * density).toInt()
-      val chrome = 12 + (if (headerShown) 34 else 0) + (if (show.summary) 16 else 0)
+      val chartW = ((chartWidthDp - 20) * density).toInt()
+      val chrome = 12 + (if (headerShown) 34 else 0) + (if (show.summary || locationInSummary) 16 else 0) +
+        (if (show.clock == "big") 24 else 0)
       val chartH = ((heightDp - chrome).coerceAtLeast(48) * density).toInt()
       val nowIndex = if (date == today) hours.indexOfFirst { it.hourKey == nowKey } else -1
       views.setImageViewBitmap(R.id.chart, ChartRenderer.render(chartW, chartH, density, hours, nowIndex, s))

@@ -35,7 +35,9 @@ No accounts, no API keys, no trackers. Just the forecast.
 
 - **The chart on your home screen,** with **‹ day ›** arrows to browse the forecast, the current temperature, and the day's high, low and rain.
 - **Stays fresh on its own:** the app shares every forecast it loads, and the widget also refreshes in the background (every 15 min to 4 h, 30 min by default).
-- **Pick what it shows:** location, current conditions, the day summary, the arrows, the refresh button and the rain bars can each be switched on or off. It follows the app's palette, theme, units and language.
+- **A clock built in:** big (time and date, the default), small (next to the temperature) or off. Tap it to open your clock app.
+- **See-through if you like:** background from 100% down to fully transparent; below 50% the text turns white with a shadow.
+- **Pick what it shows:** location, current conditions, the day summary, the arrows, the refresh button and the rain bars can each be switched on or off. It resizes from 3×2 and follows the app's palette, theme, units and language.
 
 ### 📍 Locations
 

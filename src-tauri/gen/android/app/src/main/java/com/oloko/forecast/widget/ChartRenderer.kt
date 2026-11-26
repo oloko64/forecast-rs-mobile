@@ -85,10 +85,14 @@ object ChartRenderer {
       lineTo(x(0), tempBottom + dp(6f))
       close()
     }
-    val fade = (s.temp and 0x00ffffff)
-    canvas.drawPath(fill, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      shader = LinearGradient(0f, tempTop, 0f, tempBottom + dp(6f), fade or (0x55 shl 24), fade, Shader.TileMode.CLAMP)
-    })
+    // The fill fades with the widget background: none at all when fully transparent.
+    val fillAlpha = 0x55 * s.show.background / 100
+    if (fillAlpha > 0) {
+      val fade = (s.temp and 0x00ffffff)
+      canvas.drawPath(fill, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(0f, tempTop, 0f, tempBottom + dp(6f), fade or (fillAlpha shl 24), fade, Shader.TileMode.CLAMP)
+      })
+    }
     canvas.drawPath(line, Paint(Paint.ANTI_ALIAS_FLAG).apply {
       color = s.temp
       style = Paint.Style.STROKE
@@ -97,7 +101,11 @@ object ChartRenderer {
       strokeCap = Paint.Cap.ROUND
     })
 
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = dp(10f); color = s.muted; textAlign = Paint.Align.CENTER }
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      textSize = dp(10f); color = s.muted; textAlign = Paint.Align.CENTER
+      // Over the wallpaper (transparent widget), labels need a shadow to stay readable.
+      if (s.show.transparent) setShadowLayer(dp(3f), 0f, dp(1f), 0xB3000000.toInt())
+    }
 
     // Hour labels every 6 h.
     hours.forEachIndexed { i, hour ->
@@ -105,12 +113,13 @@ object ChartRenderer {
       if (hh % 6 == 0) canvas.drawText("${hh.toString().padStart(2, '0')}h", x(i).coerceIn(dp(12f), w - dp(12f)), h - dp(2f), text)
     }
 
-    // Day's high and low, at their points (skipped when "now" sits there).
+    // Day's high and low, at their points (skipped next to "now", whose labels win).
+    fun clearOfNow(i: Int) = nowIndex !in 0 until n || kotlin.math.abs(i - nowIndex) > 2
     val hi = temps.indexOf(tMax)
     val lo = temps.indexOf(tMin)
     text.color = s.muted
-    if (hi != nowIndex) canvas.drawText("${Math.round(tMax)}°", x(hi).coerceIn(dp(12f), w - dp(12f)), y(tMax) - dp(5f), text)
-    if (lo != nowIndex && lo != hi) canvas.drawText("${Math.round(tMin)}°", x(lo).coerceIn(dp(12f), w - dp(12f)), y(tMin) + dp(13f), text)
+    if (clearOfNow(hi)) canvas.drawText("${Math.round(tMax)}°", x(hi).coerceIn(dp(12f), w - dp(12f)), y(tMax) - dp(5f), text)
+    if (clearOfNow(lo) && lo != hi) canvas.drawText("${Math.round(tMin)}°", x(lo).coerceIn(dp(12f), w - dp(12f)), y(tMin) + dp(13f), text)
 
     // "Now" marker.
     if (nowIndex in 0 until n) {
@@ -123,10 +132,15 @@ object ChartRenderer {
       canvas.drawCircle(nx, ny, dp(4.5f), Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = s.temp; style = Paint.Style.STROKE; strokeWidth = dp(2.2f)
       })
+      val labelX = nx.coerceIn(dp(22f), w - dp(22f))
       text.color = s.fg
       text.typeface = Typeface.DEFAULT_BOLD
       text.textSize = dp(11f)
-      canvas.drawText("${Math.round(temps[nowIndex])}°", nx.coerceIn(dp(14f), w - dp(14f)), max(dp(11f), ny - dp(9f)), text)
+      canvas.drawText("${Math.round(temps[nowIndex])}°", labelX, max(dp(11f), ny - dp(9f)), text)
+      // This hour's rain, under the point.
+      text.color = s.rain
+      text.textSize = dp(10f)
+      canvas.drawText("${s.mm(hours[nowIndex].precipitation)} mm", labelX, min(rainBottom - dp(4f), ny + dp(18f)), text)
     }
   }
 }

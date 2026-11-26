@@ -37,6 +37,43 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- Clock, small style: time inline before the current conditions. -->
+        <TextClock
+          android:id="@+id/clock_small"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginEnd="10dp"
+          android:format12Hour="h:mm"
+          android:format24Hour="HH:mm"
+          android:textSize="17sp"
+          android:textStyle="bold" />
+
+        <!-- Clock, big style: large time with the date under it. -->
+        <LinearLayout
+          android:id="@+id/clock_big_block"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginEnd="14dp"
+          android:orientation="vertical">
+
+          <TextClock
+            android:id="@+id/clock_big"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm"
+            android:format24Hour="HH:mm"
+            android:includeFontPadding="false"
+            android:textSize="34sp" />
+
+          <TextClock
+            android:id="@+id/clock_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEE, d MMM"
+            android:format24Hour="EEE, d MMM"
+            android:textSize="12sp" />
+        </LinearLayout>
+
         <TextView
           android:id="@+id/now_icon"
           android:layout_width="wrap_content"

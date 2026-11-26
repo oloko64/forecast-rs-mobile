@@ -51,7 +51,8 @@
   const REFRESH = minutes([10, 15, 30, 60, 120]);
   const RESUME = minutes([15, 30, 60, 120]);
   const WIDGET_REFRESH = minutes([15, 30, 60, 120, 240]);
-  const WIDGET_PARTS: { id: keyof WidgetOptions; name: Parameters<typeof t>[0] }[] = [
+  type WidgetPart = "location" | "now" | "summary" | "day_picker" | "refresh_button" | "rain";
+  const WIDGET_PARTS: { id: WidgetPart; name: Parameters<typeof t>[0] }[] = [
     { id: "location", name: "widgetLocation" },
     { id: "now", name: "widgetNow" },
     { id: "summary", name: "widgetSummary" },
@@ -59,6 +60,13 @@
     { id: "refresh_button", name: "widgetRefreshButton" },
     { id: "rain", name: "widgetRain" },
   ];
+
+  const CLOCKS = $derived<{ id: WidgetOptions["clock"]; name: string }[]>([
+    { id: "off", name: t("clockOff") },
+    { id: "small", name: t("clockSmall") },
+    { id: "big", name: t("clockBig") },
+  ]);
+  const BACKGROUNDS = [100, 75, 50, 25, 0].map((p) => ({ id: p, name: `${p}%` }));
 
   // The sheet opens on a list of sections; each one is its own page.
   type Page = "appearance" | "forecast" | "updates" | "widget";
@@ -108,9 +116,10 @@
     },
   ]);
 
-  function toggleWidgetPart(id: keyof WidgetOptions) {
+  function toggleWidgetPart(id: (typeof WIDGET_PARTS)[number]["id"]) {
     onchange({ widget: { ...config.widget, [id]: !config.widget[id] } });
   }
+  const setWidget = (patch: Partial<WidgetOptions>) => onchange({ widget: { ...config.widget, ...patch } });
 
   let editing = $state<ColorRole | null>(null);
   let draft = $state<PaletteColors | null>(null);
@@ -259,6 +268,14 @@
             onchange({ widget_refresh_minutes: id as number }),
           )}
           <p class="hint">{t("widgetRefreshHint")}</p>
+
+          <h3>{t("widgetClock")}</h3>
+          {@render segmented(CLOCKS, config.widget.clock, (id) => setWidget({ clock: id as WidgetOptions["clock"] }))}
+          <p class="hint">{t("widgetClockHint")}</p>
+
+          <h3>{t("widgetBackground")}</h3>
+          {@render segmented(BACKGROUNDS, config.widget.background, (id) => setWidget({ background: id as number }))}
+          <p class="hint">{t("widgetBackgroundHint")}</p>
 
           <h3>{t("widgetShow")}</h3>
           <div class="toggles">

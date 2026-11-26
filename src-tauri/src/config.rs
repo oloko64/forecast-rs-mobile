@@ -55,13 +55,16 @@ pub(crate) struct Config {
     pub widget_refresh_minutes: u32,
     #[serde(default)]
     pub widget: WidgetOptions,
+    /// Which `WIDGET_DEFAULTS_VERSION` this config has been migrated to.
+    #[serde(default)]
+    pub widget_defaults: u32,
 }
 
 fn default_widget_refresh_minutes() -> u32 {
     DEFAULT_WIDGET_REFRESH_MINUTES
 }
 
-/// What the home-screen widget shows besides the temperature line.
+/// What the home-screen widget shows and how it looks.
 /// Read by the widget's Kotlin code from config.json.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -72,20 +75,37 @@ pub(crate) struct WidgetOptions {
     pub day_picker: bool,
     pub refresh_button: bool,
     pub rain: bool,
+    pub clock: ClockStyle,
+    /// Background opacity in percent; 0 is fully transparent.
+    pub background: u8,
 }
 
 impl Default for WidgetOptions {
     fn default() -> Self {
         Self {
-            location: true,
+            location: false,
             now: true,
-            summary: true,
+            summary: false,
             day_picker: true,
             refresh_button: true,
             rain: true,
+            clock: ClockStyle::Big,
+            background: 100,
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ClockStyle {
+    Off,
+    Small,
+    #[default]
+    Big,
+}
+
+/// Bumped when the widget's defaults change for everyone (see `migrate`).
+const WIDGET_DEFAULTS_VERSION: u32 = 2;
 
 fn default_refresh_minutes() -> u32 {
     DEFAULT_REFRESH_MINUTES
@@ -204,6 +224,7 @@ impl Default for Config {
             language: Language::default(),
             widget_refresh_minutes: DEFAULT_WIDGET_REFRESH_MINUTES,
             widget: WidgetOptions::default(),
+            widget_defaults: WIDGET_DEFAULTS_VERSION,
         }
     }
 }
@@ -268,7 +289,8 @@ impl Config {
         if let Some(minutes) = patch.widget_refresh_minutes {
             self.widget_refresh_minutes = clamp_to(minutes, &WIDGET_REFRESH_MINUTES_RANGE);
         }
-        if let Some(widget) = patch.widget {
+        if let Some(mut widget) = patch.widget {
+            widget.background = widget.background.min(100);
             self.widget = widget;
         }
         if let Some(minutes) = patch.resume_minutes {
@@ -282,6 +304,19 @@ impl Config {
                 self.custom_colors.insert(palette, colors);
             }
         }
+    }
+
+    /// One-time changes for configs saved by older versions. Returns whether
+    /// anything changed (the caller saves it, so the widget sees it too).
+    pub(crate) fn migrate(&mut self) -> bool {
+        if self.widget_defaults >= WIDGET_DEFAULTS_VERSION {
+            return false;
+        }
+        // v2: the location name and the day summary are off by default.
+        self.widget.location = false;
+        self.widget.summary = false;
+        self.widget_defaults = WIDGET_DEFAULTS_VERSION;
+        true
     }
 
     pub(crate) fn is_favorite(&self, location: &Location) -> bool {
@@ -356,8 +391,11 @@ mod tests {
             widget_refresh_minutes: 60,
             widget: WidgetOptions {
                 rain: false,
+                clock: ClockStyle::Big,
+                background: 25,
                 ..WidgetOptions::default()
             },
+            widget_defaults: WIDGET_DEFAULTS_VERSION,
         };
         config.save_to(&dir.file()).unwrap();
         assert_eq!(Config::load_from(&dir.file()).unwrap(), config);
@@ -409,12 +447,51 @@ mod tests {
         config.apply(patch);
         assert_eq!(config.widget_refresh_minutes, 15, "Android's minimum");
         assert!(!config.widget.rain);
-        assert!(config.widget.location && config.widget.day_picker);
+        assert!(config.widget.day_picker && config.widget.now);
+        assert!(
+            !config.widget.location && !config.widget.summary,
+            "off by default"
+        );
+        assert_eq!(config.widget.clock, ClockStyle::Big, "big clock by default");
+        assert_eq!(config.widget.background, 100);
         config.apply(SettingsPatch {
             widget_refresh_minutes: Some(999),
             ..SettingsPatch::default()
         });
         assert_eq!(config.widget_refresh_minutes, 240);
+    }
+
+    #[test]
+    fn widget_background_is_capped_at_100() {
+        let mut config = Config::default();
+        let patch: SettingsPatch =
+            serde_json::from_str(r#"{"widget":{"background":250,"clock":"small"}}"#).unwrap();
+        config.apply(patch);
+        assert_eq!(config.widget.background, 100);
+        assert_eq!(config.widget.clock, ClockStyle::Small);
+    }
+
+    #[test]
+    fn older_widget_settings_get_the_new_defaults_once() {
+        let dir = TempDir::new("migrate");
+        std::fs::create_dir_all(&dir.0).unwrap();
+        std::fs::write(
+            dir.file(),
+            r#"{"widget":{"location":true,"summary":true,"rain":false}}"#,
+        )
+        .unwrap();
+        let mut config = Config::load_from(&dir.file()).unwrap();
+        assert!(config.migrate());
+        assert!(!config.widget.location && !config.widget.summary);
+        assert!(!config.widget.rain, "other choices are kept");
+        assert_eq!(config.widget.clock, ClockStyle::Big);
+
+        // Turned back on after the migration: stays on.
+        config.widget.location = true;
+        assert!(!config.migrate());
+        assert!(config.widget.location);
+        // A brand-new config is already current.
+        assert!(!Config::default().migrate());
     }
 
     #[test]

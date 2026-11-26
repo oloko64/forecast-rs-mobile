@@ -33,15 +33,22 @@ data class Forecast(
   }
 }
 
-/** Which parts the widget shows (config.json "widget"); all on by default. */
+/** What the widget shows and how (config.json "widget"); defaults match the app's. */
 data class WidgetShow(
-  val location: Boolean = true,
+  val location: Boolean = false,
   val now: Boolean = true,
-  val summary: Boolean = true,
+  val summary: Boolean = false,
   val dayPicker: Boolean = true,
   val refreshButton: Boolean = true,
   val rain: Boolean = true,
-)
+  /** "off", "small" or "big". */
+  val clock: String = "big",
+  /** Background opacity in percent. */
+  val background: Int = 100,
+) {
+  /** Under half opaque: white text with shadows, to read over the wallpaper. */
+  val transparent: Boolean get() = background < 50
+}
 
 /** The app's settings that matter to the widget (from config.json). */
 data class Settings(
@@ -115,13 +122,26 @@ data class Settings(
       }
       val location = cfg.optJSONObject("last_location")
       val w = cfg.optJSONObject("widget")
-      fun shown(key: String) = w?.optBoolean(key, true) ?: true
+      val defaults = WidgetShow()
+      fun shown(key: String, default: Boolean) = w?.optBoolean(key, default) ?: default
+      val show = WidgetShow(
+        location = shown("location", defaults.location),
+        now = shown("now", defaults.now),
+        summary = shown("summary", defaults.summary),
+        dayPicker = shown("day_picker", defaults.dayPicker),
+        refreshButton = shown("refresh_button", defaults.refreshButton),
+        rain = shown("rain", defaults.rain),
+        clock = w?.optString("clock", defaults.clock)?.takeIf { it in setOf("off", "small", "big") } ?: defaults.clock,
+        background = (w?.optInt("background", defaults.background) ?: defaults.background).coerceIn(0, 100),
+      )
+      val white = Color.WHITE
       return Settings(
         dark = dark,
-        card = Color.parseColor(if (dark) "#182030" else "#ffffff"),
-        fg = Color.parseColor(if (dark) "#e9eef7" else "#172033"),
-        muted = Color.parseColor(if (dark) "#8e9ab0" else "#66728a"),
-        line = Color.parseColor(if (dark) "#263147" else "#e1e6ef"),
+        // See-through widgets get a dark tint in either theme, so the white text stays readable.
+        card = Color.parseColor(if (dark || show.transparent) "#182030" else "#ffffff"),
+        fg = if (show.transparent) white else Color.parseColor(if (dark) "#e9eef7" else "#172033"),
+        muted = if (show.transparent) Color.parseColor("#E6FFFFFF") else Color.parseColor(if (dark) "#8e9ab0" else "#66728a"),
+        line = if (show.transparent) Color.parseColor("#66FFFFFF") else Color.parseColor(if (dark) "#263147" else "#e1e6ef"),
         accent = color("accent", preset[0]),
         temp = color("temp", preset[1]),
         rain = color("rain", preset[2]),
@@ -132,14 +152,7 @@ data class Settings(
         lon = location?.optDouble("lon")?.takeUnless { it.isNaN() },
         timezone = location?.optString("timezone")?.ifEmpty { null },
         locationName = location?.optString("name")?.ifEmpty { null },
-        show = WidgetShow(
-          location = shown("location"),
-          now = shown("now"),
-          summary = shown("summary"),
-          dayPicker = shown("day_picker"),
-          refreshButton = shown("refresh_button"),
-          rain = shown("rain"),
-        ),
+        show = show,
         refreshMinutes = cfg.optInt("widget_refresh_minutes", 30).coerceIn(15, 240),
       )
     }
