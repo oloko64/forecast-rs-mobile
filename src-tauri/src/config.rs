@@ -13,6 +13,12 @@ pub(crate) const FILE_NAME: &str = "config.json";
 /// Day counts offered in the settings, today included.
 pub(crate) const DAY_CHOICES: [u32; 4] = [3, 7, 10, 16];
 const DEFAULT_DAYS: u32 = 7;
+/// Auto-refresh interval while the app is open, in minutes (5 min to 2 h).
+const DEFAULT_REFRESH_MINUTES: u32 = 15;
+const REFRESH_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 5..=120;
+/// On coming back to the app, refresh if the forecast is older than this (10 min to 2 h).
+const DEFAULT_RESUME_MINUTES: u32 = 30;
+const RESUME_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 10..=120;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
@@ -35,6 +41,22 @@ pub(crate) struct Config {
     /// User changes to the preset colors, per palette.
     #[serde(default)]
     pub custom_colors: BTreeMap<Palette, PaletteColors>,
+    #[serde(default = "default_refresh_minutes")]
+    pub refresh_minutes: u32,
+    #[serde(default = "default_resume_minutes")]
+    pub resume_minutes: u32,
+}
+
+fn default_refresh_minutes() -> u32 {
+    DEFAULT_REFRESH_MINUTES
+}
+
+fn default_resume_minutes() -> u32 {
+    DEFAULT_RESUME_MINUTES
+}
+
+fn clamp_to(minutes: u32, range: &std::ops::RangeInclusive<u32>) -> u32 {
+    minutes.clamp(*range.start(), *range.end())
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +129,8 @@ pub(crate) struct SettingsPatch {
     pub units: Option<Units>,
     /// Replaces a palette's custom colors; all fields empty resets it to the preset.
     pub custom_colors: Option<(Palette, PaletteColors)>,
+    pub refresh_minutes: Option<u32>,
+    pub resume_minutes: Option<u32>,
 }
 
 impl Default for Config {
@@ -120,6 +144,8 @@ impl Default for Config {
             provider: Provider::default(),
             units: Units::default(),
             custom_colors: BTreeMap::new(),
+            refresh_minutes: DEFAULT_REFRESH_MINUTES,
+            resume_minutes: DEFAULT_RESUME_MINUTES,
         }
     }
 }
@@ -140,6 +166,8 @@ impl Config {
         let mut config: Self = serde_json::from_str(&content)
             .with_context(|| format!("Invalid config file {}", path.display()))?;
         config.days = config.days.clamp(1, MAX_FORECAST_DAYS);
+        config.refresh_minutes = clamp_to(config.refresh_minutes, &REFRESH_MINUTES_RANGE);
+        config.resume_minutes = clamp_to(config.resume_minutes, &RESUME_MINUTES_RANGE);
         Ok(config)
     }
 
@@ -170,6 +198,12 @@ impl Config {
         }
         if let Some(units) = patch.units {
             self.units = units;
+        }
+        if let Some(minutes) = patch.refresh_minutes {
+            self.refresh_minutes = clamp_to(minutes, &REFRESH_MINUTES_RANGE);
+        }
+        if let Some(minutes) = patch.resume_minutes {
+            self.resume_minutes = clamp_to(minutes, &RESUME_MINUTES_RANGE);
         }
         if let Some((palette, colors)) = patch.custom_colors {
             let colors = colors.sanitized();
@@ -247,6 +281,8 @@ mod tests {
                     ..PaletteColors::default()
                 },
             )]),
+            refresh_minutes: 30,
+            resume_minutes: 60,
         };
         config.save_to(&dir.file()).unwrap();
         assert_eq!(Config::load_from(&dir.file()).unwrap(), config);
@@ -281,7 +317,37 @@ mod tests {
         assert_eq!(config.palette, Palette::Ocean);
         assert_eq!(config.provider, Provider::OpenMeteo);
         assert_eq!(config.units, Units::Celsius);
+        assert_eq!(config.refresh_minutes, 15);
+        assert_eq!(config.resume_minutes, 30);
         assert!(config.custom_colors.is_empty());
+    }
+
+    #[test]
+    fn refresh_intervals_are_clamped() {
+        let mut config = Config::default();
+        for (asked, kept) in [(2, 5), (5, 5), (15, 15), (120, 120), (600, 120)] {
+            config.apply(SettingsPatch {
+                refresh_minutes: Some(asked),
+                ..SettingsPatch::default()
+            });
+            assert_eq!(config.refresh_minutes, kept);
+        }
+        for (asked, kept) in [(2, 10), (10, 10), (30, 30), (120, 120), (600, 120)] {
+            config.apply(SettingsPatch {
+                resume_minutes: Some(asked),
+                ..SettingsPatch::default()
+            });
+            assert_eq!(config.resume_minutes, kept);
+        }
+    }
+
+    #[test]
+    fn saved_out_of_range_intervals_are_clamped_on_load() {
+        let dir = TempDir::new("intervals");
+        std::fs::create_dir_all(&dir.0).unwrap();
+        std::fs::write(dir.file(), r#"{"refresh_minutes":2,"resume_minutes":500}"#).unwrap();
+        let config = Config::load_from(&dir.file()).unwrap();
+        assert_eq!((config.refresh_minutes, config.resume_minutes), (5, 120));
     }
 
     #[test]

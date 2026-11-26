@@ -37,8 +37,6 @@
   import LocationSheet from "$lib/components/LocationSheet.svelte";
   import SettingsSheet from "$lib/components/SettingsSheet.svelte";
 
-  /** Refresh automatically when the app comes back after this long. */
-  const STALE_MS = 30 * 60 * 1000;
   const PULL_TRIGGER = 70;
 
   let config = $state<Config>({
@@ -50,7 +48,11 @@
     provider: "open_meteo",
     units: "celsius",
     custom_colors: {},
+    refresh_minutes: 15,
+    resume_minutes: 30,
   });
+  /** The user is dragging across the chart: skip easing so everything follows. */
+  let scrubbing = $state(false);
   /** Unsaved colors while dragging a slider in settings. */
   let previewColors = $state<PaletteColors | null>(null);
   let dayChoices = $state<number[]>([3, 7, 10, 16]);
@@ -129,8 +131,14 @@
 
   // The big temperature counts to its new value.
   const heroTemp = new Tween(0, { duration: 500, easing: cubicInOut });
+  let heroShown = false;
   $effect(() => {
-    if (selectedHour) heroTemp.target = toUnit(selectedHour.temperature);
+    if (!selectedHour) return;
+    const value = toUnit(selectedHour.temperature);
+    // Show the first value directly; count only when it changes.
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    heroTemp.set(value, heroShown && !reduced && !scrubbing ? undefined : { duration: 0 });
+    heroShown = true;
   });
 
   async function changeSettings(patch: SettingsPatch) {
@@ -188,11 +196,17 @@
   }
 
   onMount(() => {
-    const tick = setInterval(() => (clock = Date.now()), 60_000);
+    // Refresh every `refresh_minutes` while the app is open and visible, and on
+    // coming back if the forecast is older than `resume_minutes`.
+    const olderThan = (minutes: number) => fetchedAt > 0 && Date.now() - fetchedAt >= minutes * 60_000;
+    const tick = setInterval(() => {
+      clock = Date.now();
+      if (document.visibilityState === "visible" && olderThan(config.refresh_minutes)) refresh();
+    }, 30_000);
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       clock = Date.now();
-      if (Date.now() - fetchedAt > STALE_MS) refresh();
+      if (olderThan(config.resume_minutes)) refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -308,14 +322,25 @@
       <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
 
       <section class="card" in:rise={{ y: 16, duration: 450 }}>
-        <HourChart hours={dayHours} selected={selected - dayStart} onselect={(i) => (selected = dayStart + i)} />
+        <HourChart
+          hours={dayHours}
+          selected={selected - dayStart}
+          onselect={(i) => (selected = dayStart + i)}
+          onscrub={(on) => (scrubbing = on)}
+        />
       </section>
     {/if}
   </div>
 
   {#if forecast && selectedHour}
     <section class="card hours" in:rise={{ y: 20, duration: 500 }}>
-      <HourList hours={dayHours} selected={selected - dayStart} {nowKey} onselect={(i) => (selected = dayStart + i)}>
+      <HourList
+        hours={dayHours}
+        selected={selected - dayStart}
+        {nowKey}
+        instant={scrubbing}
+        onselect={(i) => (selected = dayStart + i)}
+      >
         {#snippet footer()}
           <p class="credit">
             {#if forecast!.source === "met_norway"}

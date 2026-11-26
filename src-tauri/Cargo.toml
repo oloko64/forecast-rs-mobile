@@ -1,6 +1,6 @@
 [package]
 name = "forecast-mobile"
-version = "0.3.0"
+version = "0.4.0"
 description = "Hourly weather forecast powered by Open-Meteo"
 authors = ["OLoKo64"]
 edition = "2024"
@@ -22,7 +22,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # MET Norway returns UTC times: convert them to the location's local time.
 chrono-tz = "0.10"
 iana-time-zone = "0.1"
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "macros"] }
 # TLS: rustls with the pure-Rust-friendly `ring` backend and bundled Mozilla roots.
 # No OpenSSL, no aws-lc (CMake), no platform verifier (needs JNI on Android).
 reqwest = { version = "0.13", default-features = false, features = [

@@ -11,12 +11,15 @@
     nowKey,
     onselect,
     footer,
+    instant = false,
   }: {
     hours: HourForecast[];
     selected: number;
     nowKey: string;
     onselect: (index: number) => void;
     footer?: Snippet;
+    /** Jump instead of smooth-scrolling (while scrubbing the chart). */
+    instant?: boolean;
   } = $props();
 
   let list: HTMLDivElement;
@@ -27,7 +30,7 @@
     void hours;
     const row = list?.querySelector<HTMLElement>(`[data-i="${selected}"]`);
     if (!row) return;
-    list.scrollTo({ top: row.offsetTop, behavior: first ? "instant" : "smooth" });
+    list.scrollTo({ top: row.offsetTop, behavior: first || instant ? "instant" : "smooth" });
     first = false;
   });
 </script>

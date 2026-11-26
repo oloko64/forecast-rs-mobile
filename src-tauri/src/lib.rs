@@ -5,6 +5,7 @@ mod http;
 mod location;
 mod metno;
 mod openmeteo;
+mod spot;
 mod types;
 
 use std::{path::PathBuf, sync::Mutex};
@@ -73,6 +74,12 @@ async fn search_locations(query: String) -> Result<Vec<Location>, String> {
     geocoding::search(&query).await.map_err(err)
 }
 
+/// Names a point picked on the map and resolves its timezone.
+#[tauri::command]
+async fn describe_spot(lat: f64, lon: f64, fallback_timezone: Option<String>) -> Location {
+    spot::describe(lat, lon, fallback_timezone).await
+}
+
 #[tauri::command]
 fn load_config(store: State<'_, ConfigStore>) -> Result<Config, String> {
     store
@@ -133,6 +140,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_forecast,
             search_locations,
+            describe_spot,
             load_config,
             set_last_location,
             toggle_favorite,

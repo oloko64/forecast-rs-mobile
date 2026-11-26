@@ -39,9 +39,13 @@ export interface Config {
   provider: Provider;
   units: Units;
   custom_colors: Partial<Record<Palette, PaletteColors>>;
+  /** Auto-refresh interval while the app is open (5 to 120). */
+  refresh_minutes: number;
+  /** On coming back, refresh if the forecast is older than this (10 to 120). */
+  resume_minutes: number;
 }
 
-export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units">> & {
+export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes">> & {
   /** Replaces a palette's custom colors; empty resets it to the preset. */
   custom_colors?: [Palette, PaletteColors];
 };

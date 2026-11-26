@@ -1,5 +1,5 @@
 <script lang="ts">
-  export type IconName = "star" | "star-filled" | "gear" | "pin" | "chevron-down" | "arrow-up" | "arrow-down" | "drop";
+  export type IconName = "star" | "star-filled" | "gear" | "pin" | "chevron-down" | "arrow-up" | "arrow-down" | "drop" | "map";
   let { name, size = 24 }: { name: IconName; size?: number } = $props();
 </script>
 
@@ -33,6 +33,9 @@
     <path d="M12 19V5M6 11l6-6 6 6" />
   {:else if name === "arrow-down"}
     <path d="M12 5v14M6 13l6 6 6-6" />
+  {:else if name === "map"}
+    <path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z" />
+    <path d="M9 4v13.5M15 6.5V20" />
   {:else if name === "drop"}
     <path d="M12 3.5s-6 6.6-6 10.8a6 6 0 0 0 12 0C18 10.1 12 3.5 12 3.5z" />
   {/if}

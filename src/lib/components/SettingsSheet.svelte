@@ -39,6 +39,9 @@
     { id: "fahrenheit", name: "°F  Fahrenheit" },
   ];
   const PROVIDERS = Object.entries(PROVIDER_NAMES) as [Provider, string][];
+  const minutes = (list: number[]) => list.map((m) => ({ id: m, name: m < 60 ? `${m}m` : `${m / 60}h` }));
+  const REFRESH = minutes([5, 10, 15, 30, 60, 120]);
+  const RESUME = minutes([10, 15, 30, 60, 120]);
 
   let editing = $state<ColorRole | null>(null);
   let draft = $state<PaletteColors | null>(null);
@@ -135,6 +138,13 @@
       config.days,
       (id) => onchange({ days: id as number }),
     )}
+
+    <h3>Refresh while open</h3>
+    {@render segmented(REFRESH, config.refresh_minutes, (id) => onchange({ refresh_minutes: id as number }))}
+
+    <h3>When coming back</h3>
+    {@render segmented(RESUME, config.resume_minutes, (id) => onchange({ resume_minutes: id as number }))}
+    <p class="hint">Refreshes on returning to the app if the forecast is older than this.</p>
 
     <h3>Weather data</h3>
     {@render segmented(

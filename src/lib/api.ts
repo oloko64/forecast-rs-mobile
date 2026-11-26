@@ -53,3 +53,7 @@ export async function gpsLocation(): Promise<Location> {
 
 /** 4 decimals ≈ 11 m: as precise as GPS gets, and matches samePlace()'s tolerance. */
 const round = (n: number) => Math.round(n * 1e4) / 1e4;
+
+/** Names a point picked on the map and resolves its timezone (never fails). */
+export const describeSpot = (lat: number, lon: number, fallbackTimezone?: string) =>
+  invoke<Location>("describe_spot", { lat, lon, fallbackTimezone: fallbackTimezone ?? null });

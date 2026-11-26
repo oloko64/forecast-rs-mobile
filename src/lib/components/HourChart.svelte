@@ -8,12 +8,17 @@
     hours,
     selected,
     onselect,
+    onscrub,
   }: {
     hours: HourForecast[];
     /** Index into `hours`. */
     selected: number;
     onselect: (index: number) => void;
+    /** True while the user drags across the chart. */
+    onscrub?: (scrubbing: boolean) => void;
   } = $props();
+
+  let scrubbing = false;
 
   let width = $state(320);
   const H = 190;
@@ -41,7 +46,8 @@
     rainT.set(rainTarget, same ? MOTION : { duration: 0 });
   });
   $effect(() => {
-    selT.set(selected);
+    // Follow the finger exactly while dragging; ease for taps elsewhere.
+    selT.set(selected, scrubbing ? { duration: 0 } : MOTION);
   });
   const temps = $derived(tempsT.current.length === n ? tempsT.current : target);
   const rains = $derived(rainT.current.length === n ? rainT.current : rainTarget);
@@ -94,7 +100,15 @@
 
   function down(e: PointerEvent) {
     (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+    scrubbing = true;
+    onscrub?.(true);
     pick(e);
+  }
+
+  function up() {
+    if (!scrubbing) return;
+    scrubbing = false;
+    onscrub?.(false);
   }
 </script>
 
@@ -110,7 +124,10 @@
       aria-valuenow={selected}
       tabindex="0"
       onpointerdown={down}
-      onpointermove={(e) => e.buttons && pick(e)}
+      onpointermove={(e) => scrubbing && pick(e)}
+      onpointerup={up}
+      onpointercancel={up}
+      onlostpointercapture={up}
     >
       <defs>
         <linearGradient id="tempFill" x1="0" x2="0" y1="0" y2="1">
