@@ -1,6 +1,6 @@
 [package]
 name = "forecast-mobile"
-version = "0.6.0"
+version = "0.7.0"
 description = "Hourly weather forecast powered by Open-Meteo"
 authors = ["OLoKo64"]
 edition = "2024"

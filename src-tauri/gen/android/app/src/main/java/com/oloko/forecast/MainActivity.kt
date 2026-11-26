@@ -6,12 +6,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.oloko.forecast.widget.ForecastWidget
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     resizeForKeyboard()
+  }
+
+  /** Leaving the app: show its latest forecast and settings on the widget. */
+  override fun onPause() {
+    super.onPause()
+    ForecastWidget.updateAll(this)
   }
 
   /**

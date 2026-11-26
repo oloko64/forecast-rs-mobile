@@ -19,6 +19,10 @@ const REFRESH_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 10..=120;
 /// On coming back to the app, refresh if the forecast is older than this (15 min to 2 h).
 const DEFAULT_RESUME_MINUTES: u32 = 30;
 const RESUME_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 15..=120;
+/// Home-screen widget background refresh, in minutes. Android runs periodic
+/// work at most every 15 minutes.
+const DEFAULT_WIDGET_REFRESH_MINUTES: u32 = 30;
+const WIDGET_REFRESH_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 15..=240;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
@@ -47,6 +51,40 @@ pub(crate) struct Config {
     pub resume_minutes: u32,
     #[serde(default)]
     pub language: Language,
+    #[serde(default = "default_widget_refresh_minutes")]
+    pub widget_refresh_minutes: u32,
+    #[serde(default)]
+    pub widget: WidgetOptions,
+}
+
+fn default_widget_refresh_minutes() -> u32 {
+    DEFAULT_WIDGET_REFRESH_MINUTES
+}
+
+/// What the home-screen widget shows besides the temperature line.
+/// Read by the widget's Kotlin code from config.json.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct WidgetOptions {
+    pub location: bool,
+    pub now: bool,
+    pub summary: bool,
+    pub day_picker: bool,
+    pub refresh_button: bool,
+    pub rain: bool,
+}
+
+impl Default for WidgetOptions {
+    fn default() -> Self {
+        Self {
+            location: true,
+            now: true,
+            summary: true,
+            day_picker: true,
+            refresh_button: true,
+            rain: true,
+        }
+    }
 }
 
 fn default_refresh_minutes() -> u32 {
@@ -146,6 +184,8 @@ pub(crate) struct SettingsPatch {
     pub refresh_minutes: Option<u32>,
     pub resume_minutes: Option<u32>,
     pub language: Option<Language>,
+    pub widget_refresh_minutes: Option<u32>,
+    pub widget: Option<WidgetOptions>,
 }
 
 impl Default for Config {
@@ -162,6 +202,8 @@ impl Default for Config {
             refresh_minutes: DEFAULT_REFRESH_MINUTES,
             resume_minutes: DEFAULT_RESUME_MINUTES,
             language: Language::default(),
+            widget_refresh_minutes: DEFAULT_WIDGET_REFRESH_MINUTES,
+            widget: WidgetOptions::default(),
         }
     }
 }
@@ -184,6 +226,8 @@ impl Config {
         config.days = config.days.clamp(1, MAX_FORECAST_DAYS);
         config.refresh_minutes = clamp_to(config.refresh_minutes, &REFRESH_MINUTES_RANGE);
         config.resume_minutes = clamp_to(config.resume_minutes, &RESUME_MINUTES_RANGE);
+        config.widget_refresh_minutes =
+            clamp_to(config.widget_refresh_minutes, &WIDGET_REFRESH_MINUTES_RANGE);
         Ok(config)
     }
 
@@ -220,6 +264,12 @@ impl Config {
         }
         if let Some(language) = patch.language {
             self.language = language;
+        }
+        if let Some(minutes) = patch.widget_refresh_minutes {
+            self.widget_refresh_minutes = clamp_to(minutes, &WIDGET_REFRESH_MINUTES_RANGE);
+        }
+        if let Some(widget) = patch.widget {
+            self.widget = widget;
         }
         if let Some(minutes) = patch.resume_minutes {
             self.resume_minutes = clamp_to(minutes, &RESUME_MINUTES_RANGE);
@@ -303,6 +353,11 @@ mod tests {
             refresh_minutes: 30,
             resume_minutes: 60,
             language: Language::PtBr,
+            widget_refresh_minutes: 60,
+            widget: WidgetOptions {
+                rain: false,
+                ..WidgetOptions::default()
+            },
         };
         config.save_to(&dir.file()).unwrap();
         assert_eq!(Config::load_from(&dir.file()).unwrap(), config);
@@ -340,7 +395,26 @@ mod tests {
         assert_eq!(config.refresh_minutes, 15);
         assert_eq!(config.resume_minutes, 30);
         assert_eq!(config.language, Language::System);
+        assert_eq!(config.widget_refresh_minutes, 30);
+        assert_eq!(config.widget, WidgetOptions::default());
         assert!(config.custom_colors.is_empty());
+    }
+
+    #[test]
+    fn widget_settings_are_clamped_and_partial_options_default_to_shown() {
+        let mut config = Config::default();
+        let patch: SettingsPatch =
+            serde_json::from_str(r#"{"widget_refresh_minutes":5,"widget":{"rain":false}}"#)
+                .unwrap();
+        config.apply(patch);
+        assert_eq!(config.widget_refresh_minutes, 15, "Android's minimum");
+        assert!(!config.widget.rain);
+        assert!(config.widget.location && config.widget.day_picker);
+        config.apply(SettingsPatch {
+            widget_refresh_minutes: Some(999),
+            ..SettingsPatch::default()
+        });
+        assert_eq!(config.widget_refresh_minutes, 240);
     }
 
     #[test]

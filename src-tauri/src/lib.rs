@@ -7,6 +7,7 @@ mod metno;
 mod openmeteo;
 mod spot;
 mod types;
+mod widget;
 
 use std::{path::PathBuf, sync::Mutex};
 
@@ -60,10 +61,17 @@ async fn get_forecast(
     days: u32,
 ) -> Result<ForecastResponse, String> {
     let preferred = store.config.lock().map_err(|e| e.to_string())?.provider;
-    fallback
+    let forecast = fallback
         .fetch(preferred, |p| fetch_from(p, &location, days))
         .await
-        .map_err(err)
+        .map_err(err)?;
+    // Keep the home-screen widget in sync; a failure here must not hide the forecast.
+    if let Some(dir) = store.path.parent()
+        && let Err(e) = widget::save(dir, &location, &forecast)
+    {
+        eprintln!("Widget data not saved: {e:#}");
+    }
+    Ok(forecast)
 }
 
 #[tauri::command]

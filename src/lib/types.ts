@@ -46,9 +46,22 @@ export interface Config {
   /** On coming back, refresh if the forecast is older than this (15 to 120). */
   resume_minutes: number;
   language: Language;
+  /** Home-screen widget background refresh (15 to 240 minutes). */
+  widget_refresh_minutes: number;
+  /** What the home-screen widget shows besides the temperature line. */
+  widget: WidgetOptions;
 }
 
-export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes" | "language">> & {
+export interface WidgetOptions {
+  location: boolean;
+  now: boolean;
+  summary: boolean;
+  day_picker: boolean;
+  refresh_button: boolean;
+  rain: boolean;
+}
+
+export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes" | "language" | "widget_refresh_minutes" | "widget">> & {
   /** Replaces a palette's custom colors; empty resets it to the preset. */
   custom_colors?: [Palette, PaletteColors];
 };

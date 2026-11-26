@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# WorkManager (widget refresh) builds its Room database by reflection at app start;
+# R8 full mode would strip the generated constructor and crash the app on launch.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class androidx.work.impl.WorkDatabase_Impl { *; }

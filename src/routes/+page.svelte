@@ -53,6 +53,8 @@
     refresh_minutes: 15,
     resume_minutes: 30,
     language: "system",
+    widget_refresh_minutes: 30,
+    widget: { location: true, now: true, summary: true, day_picker: true, refresh_button: true, rain: true },
   });
   /** Landscape on a phone or wider: two columns (see `split`). */
   let wide = $state(false);

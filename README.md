@@ -31,6 +31,12 @@ No accounts, no API keys, no trackers. Just the forecast.
 - **Animated weather icons.** Rain and snow fall, the sun turns, clouds drift and lightning flickers.
 - **3, 7, 10 or 16 days**, in **°C or °F**, with rain probability and millimeters per hour.
 
+### 📱 Home-screen widget
+
+- **The chart on your home screen,** with **‹ day ›** arrows to browse the forecast, the current temperature, and the day's high, low and rain.
+- **Stays fresh on its own:** the app shares every forecast it loads, and the widget also refreshes in the background (every 15 min to 4 h, 30 min by default).
+- **Pick what it shows:** location, current conditions, the day summary, the arrows, the refresh button and the rain bars can each be switched on or off. It follows the app's palette, theme, units and language.
+
 ### 📍 Locations
 
 - **City search** in the language you use, with favorites one tap away.
@@ -60,7 +66,7 @@ No accounts, no API keys, no trackers. Just the forecast.
 - **No accounts, keys, ads or analytics.** Everything is free, open data.
 - **Weather and place lookups go through Rust** over [rustls](https://github.com/rustls/rustls) (TLS written in Rust).
 - **The web view can't reach the network.** Its content security policy only allows map tiles from `tiles.openfreemap.org`.
-- **Settings stay on the phone,** in `config.json` in the app's private storage.
+- **Settings stay on the phone,** in `config.json` in the app's private storage. The widget reads the same files and, for its own refreshes, calls Open-Meteo directly.
 - **GPS coordinates are rounded** to about 11 m before they are used or saved.
 
 ## How it works
@@ -84,6 +90,7 @@ No accounts, no API keys, no trackers. Just the forecast.
 | `src-tauri/src/http.rs` | One shared reqwest client: rustls with the `ring` backend and bundled Mozilla root certificates |
 | `src/lib/components/` | The UI: chart, hour list, day strip, sheets, map picker, color picker, loader |
 | `src/lib/i18n.svelte.ts` | English and Brazilian Portuguese strings |
+| `src-tauri/gen/android/…/widget/` | The home-screen widget in Kotlin: chart drawn on a Canvas, WorkManager refresh, reads the app's `config.json` and `widget.json` |
 
 The TLS stack has no OpenSSL, no aws-lc and no platform verifier, so cross-compiling for Android needs nothing beyond the NDK.
 
