@@ -2,6 +2,7 @@
   import type { DayForecast } from "$lib/types";
   import { dayOfMonth, mm, tempUnit, weekday } from "$lib/format";
   import WeatherIcon from "./WeatherIcon.svelte";
+  import { t } from "$lib/i18n.svelte";
 
   let {
     days,
@@ -33,7 +34,7 @@
   {#each days as day (day.date)}
     {@const active = day.date === selected}
     <button class="day" class:active data-date={day.date} onclick={() => onselect(day.date)}>
-      <span class="name">{day.date === today ? "Today" : weekday(day.date)}</span>
+      <span class="name">{day.date === today ? t("today") : weekday(day.date)}</span>
       <span class="num">{dayOfMonth(day.date)}</span>
       <span class="icon"><WeatherIcon weather={day.weather} size={34} animated={active} /></span>
       <span class="max">{tempUnit(day.temperature_max)}</span>

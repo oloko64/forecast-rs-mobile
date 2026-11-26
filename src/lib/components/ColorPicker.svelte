@@ -1,5 +1,6 @@
 <script lang="ts">
   import { hexToHsl, hslToHex } from "$lib/theme";
+  import { t } from "$lib/i18n.svelte";
 
   /** Hue / saturation / lightness sliders plus quick swatches. */
   let { value, onchange }: { value: string; onchange: (hex: string) => void } = $props();
@@ -31,7 +32,7 @@
         class="swatch"
         class:active={c === value}
         style:background={c}
-        aria-label="Color {c}"
+        aria-label={t("colorLabel", { value: c })}
         onclick={() => {
           [h, s, l] = hexToHsl(c);
           last = c;
@@ -42,7 +43,7 @@
   </div>
 
   <label>
-    <span>Hue</span>
+    <span>{t("hue")}</span>
     <input
       type="range"
       min="0"
@@ -53,7 +54,7 @@
     />
   </label>
   <label>
-    <span>Saturation</span>
+    <span>{t("saturation")}</span>
     <input
       type="range"
       min="0"
@@ -64,7 +65,7 @@
     />
   </label>
   <label>
-    <span>Lightness</span>
+    <span>{t("lightness")}</span>
     <input
       type="range"
       min="15"

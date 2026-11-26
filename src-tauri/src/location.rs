@@ -20,6 +20,11 @@ pub(crate) struct Location {
     pub timezone: String,
 }
 
+/// Whether `language` (a BCP 47 tag like "pt-BR") is Portuguese.
+pub(crate) fn is_portuguese(language: Option<&str>) -> bool {
+    language.is_some_and(|l| l.to_ascii_lowercase().starts_with("pt"))
+}
+
 impl Location {
     /// Whether both locations point to the same coordinates (names may differ).
     pub(crate) fn same_place(&self, other: &Location) -> bool {

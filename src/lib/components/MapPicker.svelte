@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { t } from "$lib/i18n.svelte";
   import type { Map as MapLibreMap } from "maplibre-gl";
   // Served as-is rather than through the CSS minifier, which can reorder rules.
   import mapCss from "maplibre-gl/dist/maplibre-gl.css?url";
@@ -88,7 +89,7 @@
 <div class="wrap" class:ready class:dark>
   <div class="map" bind:this={container}></div>
   {#if failed}
-    <p class="failed">Couldn't load the map. Check your connection.</p>
+    <p class="failed">{t("mapFailed")}</p>
   {/if}
   <div class="pin" class:lifted aria-hidden="true">
     <svg width="40" height="48" viewBox="0 0 40 48">

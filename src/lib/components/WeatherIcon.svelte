@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Weather } from "$lib/types";
+  import { weatherText } from "$lib/i18n.svelte";
 
   /** Animated SVG weather icon. `animated` off draws the same icon still. */
   let { weather, size = 32, animated = false }: { weather: Weather; size?: number; animated?: boolean } =
@@ -50,7 +51,7 @@
   height={size}
   viewBox="0 0 64 64"
   role="img"
-  aria-label={weather.description}
+  aria-label={weatherText(weather.description)}
 >
   {#if scene.sun !== "none"}
     <g

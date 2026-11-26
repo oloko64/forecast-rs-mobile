@@ -4,12 +4,14 @@
   import { slide } from "svelte/transition";
   import { cubicInOut } from "svelte/easing";
   import { COLOR_ROLES, PALETTES, paletteColors, type ColorRole } from "$lib/theme";
+  import { LANGUAGES, t } from "$lib/i18n.svelte";
   import {
     PROVIDER_NAMES,
     type Config,
     type PaletteColors,
     type Provider,
     type SettingsPatch,
+    type Language,
     type ThemeMode,
     type Units,
   } from "$lib/types";
@@ -29,19 +31,21 @@
     onclose: () => void;
   } = $props();
 
-  const MODES: { id: ThemeMode; name: string }[] = [
-    { id: "system", name: "System" },
-    { id: "light", name: "Light" },
-    { id: "dark", name: "Dark" },
-  ];
+  // Derived so labels follow the language setting.
+  const MODES = $derived<{ id: ThemeMode; name: string }[]>([
+    { id: "system", name: t("system") },
+    { id: "light", name: t("light") },
+    { id: "dark", name: t("dark") },
+  ]);
+  const LANGS = $derived(LANGUAGES.map((l) => ({ id: l.id, name: l.name || t("system") })));
   const UNITS: { id: Units; name: string }[] = [
     { id: "celsius", name: "°C  Celsius" },
     { id: "fahrenheit", name: "°F  Fahrenheit" },
   ];
   const PROVIDERS = Object.entries(PROVIDER_NAMES) as [Provider, string][];
   const minutes = (list: number[]) => list.map((m) => ({ id: m, name: m < 60 ? `${m}m` : `${m / 60}h` }));
-  const REFRESH = minutes([5, 10, 15, 30, 60, 120]);
-  const RESUME = minutes([10, 15, 30, 60, 120]);
+  const REFRESH = minutes([10, 15, 30, 60, 120]);
+  const RESUME = minutes([15, 30, 60, 120]);
 
   let editing = $state<ColorRole | null>(null);
   let draft = $state<PaletteColors | null>(null);
@@ -86,14 +90,17 @@
   }
 </script>
 
-<Sheet label="Settings" onclose={close}>
+<Sheet label={t("settings")} onclose={close}>
   <div class="scroll">
-    <h2>Settings</h2>
+    <h2>{t("settings")}</h2>
 
-    <h3>Appearance</h3>
+    <h3>{t("language")}</h3>
+    {@render segmented(LANGS, config.language, (id) => onchange({ language: id as Language }))}
+
+    <h3>{t("appearance")}</h3>
     {@render segmented(MODES, config.theme_mode, (id) => onchange({ theme_mode: id as ThemeMode }))}
 
-    <h3>Color theme</h3>
+    <h3>{t("colorTheme")}</h3>
     <div class="palettes">
       {#each PALETTES as p (p.id)}
         {@const c = paletteColors(p.id, p.id === config.palette ? custom : config.custom_colors[p.id])}
@@ -101,20 +108,20 @@
           <span class="swatches">
             <i style:background={c.accent}></i><i style:background={c.temp}></i><i style:background={c.rain}></i>
           </span>
-          <span>{p.name}{config.custom_colors[p.id] ? " *" : ""}</span>
+          <span>{t(p.name)}{config.custom_colors[p.id] ? " *" : ""}</span>
         </button>
       {/each}
     </div>
 
     <div class="custom">
-      <span class="custom-label">Customize</span>
+      <span class="custom-label">{t("customize")}</span>
       {#each COLOR_ROLES as role (role.id)}
         <button
           class="role"
           class:active={editing === role.id}
           onclick={() => (editing = editing === role.id ? null : role.id)}
         >
-          <i style:background={colors[role.id]}></i>{role.name}
+          <i style:background={colors[role.id]}></i>{t(role.name)}
         </button>
       {/each}
     </div>
@@ -125,37 +132,38 @@
     {/if}
     {#if isCustom}
       <button class="reset" onclick={reset} transition:slide={{ duration: 250, easing: cubicInOut }}>
-        Reset {PALETTES.find((p) => p.id === config.palette)?.name} to preset colors
+        {t("resetColors", { palette: t(PALETTES.find((p) => p.id === config.palette)!.name) })}
       </button>
     {/if}
 
-    <h3>Temperature</h3>
+    <h3>{t("temperatureUnit")}</h3>
     {@render segmented(UNITS, config.units, (id) => onchange({ units: id as Units }))}
 
-    <h3>Days to forecast</h3>
+    <h3>{t("daysToForecast")}</h3>
     {@render segmented(
       dayChoices.map((d) => ({ id: d, name: String(d) })),
       config.days,
       (id) => onchange({ days: id as number }),
     )}
 
-    <h3>Refresh while open</h3>
+    <h3>{t("refreshWhileOpen")}</h3>
     {@render segmented(REFRESH, config.refresh_minutes, (id) => onchange({ refresh_minutes: id as number }))}
 
-    <h3>When coming back</h3>
+    <h3>{t("whenComingBack")}</h3>
     {@render segmented(RESUME, config.resume_minutes, (id) => onchange({ resume_minutes: id as number }))}
-    <p class="hint">Refreshes on returning to the app if the forecast is older than this.</p>
+    <p class="hint">{t("whenComingBackHint")}</p>
 
-    <h3>Weather data</h3>
+    <h3>{t("weatherData")}</h3>
     {@render segmented(
       PROVIDERS.map(([id, name]) => ({ id, name })),
       config.provider,
       (id) => onchange({ provider: id as Provider }),
     )}
     <p class="hint">
-      If {PROVIDER_NAMES[config.provider]} fails 3 times in a row, the app switches to
-      {PROVIDER_NAMES[config.provider === "open_meteo" ? "met_norway" : "open_meteo"]} for a while.
-      MET Norway forecasts up to ~10 days.
+      {t("fallbackHint", {
+        preferred: PROVIDER_NAMES[config.provider],
+        other: PROVIDER_NAMES[config.provider === "open_meteo" ? "met_norway" : "open_meteo"],
+      })}
     </p>
   </div>
 </Sheet>
@@ -262,14 +270,16 @@
   }
   .custom {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    margin-top: 10px;
+    margin-top: 12px;
   }
+  /* On its own line: the labels are longer in some languages. */
   .custom-label {
+    flex-basis: 100%;
     font-size: 13px;
     color: var(--muted);
-    margin-right: 2px;
   }
   .role {
     flex: 1;

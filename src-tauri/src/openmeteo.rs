@@ -273,7 +273,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs network"]
     async fn live_forecast_and_search() {
-        let places = crate::geocoding::search("Araraquara").await.unwrap();
+        let places = crate::geocoding::search("Araraquara", None).await.unwrap();
         assert!(!places.is_empty());
         let forecast = fetch_forecast(&places[0], 3).await.unwrap();
         assert_eq!(forecast.daily.len(), 3);

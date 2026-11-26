@@ -3,6 +3,7 @@
   import { hourKey, hourOf, mm, temp } from "$lib/format";
   import type { Snippet } from "svelte";
   import WeatherIcon from "./WeatherIcon.svelte";
+  import { t, weatherText } from "$lib/i18n.svelte";
   import { rise } from "$lib/motion";
 
   let {
@@ -47,10 +48,10 @@
     >
       <span class="time">
         {hourOf(h)}
-        {#if hourKey(h) === nowKey}<em class="now">now</em>{/if}
+        {#if hourKey(h) === nowKey}<em class="now">{t("now")}</em>{/if}
       </span>
       <span class="icon"><WeatherIcon weather={h.weather} size={i === selected ? 40 : 28} animated={i === selected} /></span>
-      <span class="desc">{h.weather.description}</span>
+      <span class="desc">{weatherText(h.weather.description)}</span>
       <span class="rain" class:dry={h.precipitation === 0 && !h.precipitation_probability}>
         {h.precipitation_probability != null ? `${Math.round(h.precipitation_probability)}% · ` : ""}{mm(h.precipitation)}mm
       </span>

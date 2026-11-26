@@ -2,6 +2,7 @@
   import type { HourForecast } from "$lib/types";
   import { hourOf, mm, temp } from "$lib/format";
   import { Tween } from "svelte/motion";
+  import { t } from "$lib/i18n.svelte";
   import { cubicInOut } from "svelte/easing";
 
   let {
@@ -118,7 +119,7 @@
       {width}
       height={H}
       role="slider"
-      aria-label="Hour"
+      aria-label={t("hour")}
       aria-valuemin={0}
       aria-valuemax={n - 1}
       aria-valuenow={selected}
@@ -171,8 +172,8 @@
       {/if}
     </svg>
     <div class="legend">
-      <span><i class="dot temp"></i>Temperature</span>
-      <span><i class="dot rain"></i>{rainPeak > 0 ? `Rain · max ${mm(rainPeak)} mm/h` : "Rain · none"}</span>
+      <span><i class="dot temp"></i>{t("temperature")}</span>
+      <span><i class="dot rain"></i>{rainPeak > 0 ? t("rainMax", { value: mm(rainPeak) }) : t("rainNone")}</span>
     </div>
   {/if}
 </div>

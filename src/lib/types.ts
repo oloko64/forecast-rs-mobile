@@ -16,6 +16,8 @@ export type ThemeMode = "system" | "light" | "dark";
 export type Palette = "ocean" | "forest" | "sunset";
 export type Provider = "open_meteo" | "met_norway";
 export type Units = "celsius" | "fahrenheit";
+/** "system" follows the phone. */
+export type Language = "system" | "en" | "pt-BR";
 
 /** Overrides for a palette's colors ("#rrggbb"); missing ones keep the preset. */
 export interface PaletteColors {
@@ -39,13 +41,14 @@ export interface Config {
   provider: Provider;
   units: Units;
   custom_colors: Partial<Record<Palette, PaletteColors>>;
-  /** Auto-refresh interval while the app is open (5 to 120). */
+  /** Auto-refresh interval while the app is open (10 to 120). */
   refresh_minutes: number;
-  /** On coming back, refresh if the forecast is older than this (10 to 120). */
+  /** On coming back, refresh if the forecast is older than this (15 to 120). */
   resume_minutes: number;
+  language: Language;
 }
 
-export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes">> & {
+export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units" | "refresh_minutes" | "resume_minutes" | "language">> & {
   /** Replaces a palette's custom colors; empty resets it to the preset. */
   custom_colors?: [Palette, PaletteColors];
 };

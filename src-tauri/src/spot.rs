@@ -3,22 +3,36 @@
 
 use serde::Deserialize;
 
-use crate::{http::get_json, location::Location};
+use crate::{
+    http::get_json,
+    location::{Location, is_portuguese},
+};
 
 const REVERSE_URL: &str = "https://nominatim.openstreetmap.org/reverse";
 const FORECAST_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
 /// A `Location` for the point. Lookups that fail fall back to a generic name
 /// and the given timezone (or "auto"), so a pin can always be used.
-pub(crate) async fn describe(lat: f64, lon: f64, fallback_timezone: Option<String>) -> Location {
+pub(crate) async fn describe(
+    lat: f64,
+    lon: f64,
+    fallback_timezone: Option<String>,
+    language: Option<&str>,
+) -> Location {
+    let portuguese = is_portuguese(language);
     let lat = round(lat);
     // Panning around the world yields longitudes past ±180.
     let lon = (lon + 180.0).rem_euclid(360.0) - 180.0;
     let lon = round(lon);
-    let (place, timezone) = tokio::join!(reverse(lat, lon), timezone(lat, lon));
+    let (place, timezone) = tokio::join!(reverse(lat, lon, portuguese), timezone(lat, lon));
 
     let mut location = place.ok().flatten().unwrap_or_else(|| Location {
-        name: "Pinned location".into(),
+        name: if portuguese {
+            "Local marcado"
+        } else {
+            "Pinned location"
+        }
+        .into(),
         region: None,
         country: None,
         district: None,
@@ -41,7 +55,7 @@ fn round(n: f64) -> f64 {
     (n * 1e4).round() / 1e4
 }
 
-async fn reverse(lat: f64, lon: f64) -> anyhow::Result<Option<Location>> {
+async fn reverse(lat: f64, lon: f64, portuguese: bool) -> anyhow::Result<Option<Location>> {
     let response: ReverseResponse = get_json(
         "OpenStreetMap",
         REVERSE_URL,
@@ -51,7 +65,10 @@ async fn reverse(lat: f64, lon: f64) -> anyhow::Result<Option<Location>> {
             ("lon", lon.to_string()),
             ("zoom", "14".into()),
             ("addressdetails", "1".into()),
-            ("accept-language", "en".into()),
+            (
+                "accept-language",
+                if portuguese { "pt-BR,pt" } else { "en" }.into(),
+            ),
         ],
     )
     .await?;
@@ -182,13 +199,18 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs network"]
     async fn live_describe() {
-        let l = describe(-21.7944, -48.1756, None).await;
+        let l = describe(-21.7944, -48.1756, None, None).await;
         assert_eq!(l.name, "Araraquara");
+        assert_eq!(l.country.as_deref(), Some("Brazil"));
+        let l = describe(-21.7944, -48.1756, None, Some("pt-BR")).await;
+        assert_eq!(l.country.as_deref(), Some("Brasil"));
         assert_eq!(l.timezone, "America/Sao_Paulo");
         // Wrapped longitudes from a panned-around map are normalized.
-        let l = describe(-21.7944, -48.1756 + 360.0, None).await;
+        let l = describe(-21.7944, -48.1756 + 360.0, None, None).await;
         assert!((l.lon - -48.1756).abs() < 1e-6);
-        let l = describe(0.0, -30.0, Some("UTC".into())).await;
+        let l = describe(0.0, -30.0, Some("UTC".into()), None).await;
         assert_eq!(l.name, "Pinned location");
+        let l = describe(0.0, -30.0, None, Some("pt-BR")).await;
+        assert_eq!(l.name, "Local marcado");
     }
 }

@@ -1,20 +1,21 @@
 import type { Palette, PaletteColors, ThemeMode } from "./types";
+import type { Key } from "./i18n.svelte";
 
 const CACHE_KEY = "theme";
 
 export type ColorRole = keyof PaletteColors;
 
-export const COLOR_ROLES: { id: ColorRole; name: string }[] = [
-  { id: "accent", name: "Main" },
-  { id: "temp", name: "Secondary" },
-  { id: "rain", name: "Rain" },
+export const COLOR_ROLES: { id: ColorRole; name: Key }[] = [
+  { id: "accent", name: "roleAccent" },
+  { id: "temp", name: "roleTemp" },
+  { id: "rain", name: "roleRain" },
 ];
 
 /** Preset colors (light variant), shown in settings and used as picker defaults. */
-export const PALETTES: { id: Palette; name: string; colors: Required<PaletteColors> }[] = [
-  { id: "ocean", name: "Ocean", colors: { accent: "#3867f0", temp: "#f08a24", rain: "#2f8ff5" } },
-  { id: "forest", name: "Forest", colors: { accent: "#23845a", temp: "#d4900c", rain: "#1f8aa3" } },
-  { id: "sunset", name: "Sunset", colors: { accent: "#c2417a", temp: "#ea5f2b", rain: "#6a5acd" } },
+export const PALETTES: { id: Palette; name: Key; colors: Required<PaletteColors> }[] = [
+  { id: "ocean", name: "paletteOcean", colors: { accent: "#3867f0", temp: "#f08a24", rain: "#2f8ff5" } },
+  { id: "forest", name: "paletteForest", colors: { accent: "#23845a", temp: "#d4900c", rain: "#1f8aa3" } },
+  { id: "sunset", name: "paletteSunset", colors: { accent: "#c2417a", temp: "#ea5f2b", rain: "#6a5acd" } },
 ];
 
 export function paletteColors(palette: Palette, custom?: PaletteColors): Required<PaletteColors> {

@@ -11,6 +11,7 @@
   } from "$lib/types";
   import { applyTheme } from "$lib/theme";
   import { prefs } from "$lib/prefs.svelte";
+  import { i18n, resolveLang, t, weatherText } from "$lib/i18n.svelte";
   import { Tween } from "svelte/motion";
   import { slide } from "svelte/transition";
   import { cubicInOut } from "svelte/easing";
@@ -50,6 +51,7 @@
     custom_colors: {},
     refresh_minutes: 15,
     resume_minutes: 30,
+    language: "system",
   });
   /** The user is dragging across the chart: skip easing so everything follows. */
   let scrubbing = $state(false);
@@ -127,6 +129,10 @@
   );
   $effect(() => {
     prefs.units = config.units;
+  });
+  $effect(() => {
+    i18n.lang = resolveLang(config.language);
+    document.documentElement.lang = i18n.lang;
   });
 
   // The big temperature counts to its new value.
@@ -257,20 +263,20 @@
     <header>
       <button class="place" onclick={() => (sheetOpen = true)}>
         <span class="name">
-          <span class="name-text">{location ? location.name : "Choose a location"}</span>
+          <span class="name-text">{location ? location.name : t("chooseLocation")}</span>
           <Icon name="chevron-down" size={18} />
         </span>
         {#if location}<span class="sub">{label(location).split(", ").slice(1).join(", ") || forecast?.timezone}</span>{/if}
       </button>
       {#if location}
-        <button class="icon-btn star" class:on={isFavorite} onclick={() => toggleFavorite(location!)} aria-label="Toggle favorite">
+        <button class="icon-btn star" class:on={isFavorite} onclick={() => toggleFavorite(location!)} aria-label={t("toggleFavorite")}>
           <Icon name={isFavorite ? "star-filled" : "star"} />
         </button>
       {/if}
-      <button class="icon-btn" onclick={refresh} disabled={!location} aria-label="Refresh">
+      <button class="icon-btn" onclick={refresh} disabled={!location} aria-label={t("refresh")}>
         <RefreshIcon spinning={loading && !pullRefreshing} />
       </button>
-      <button class="icon-btn gear" onclick={() => (settingsOpen = true)} aria-label="Settings">
+      <button class="icon-btn gear" onclick={() => (settingsOpen = true)} aria-label={t("settings")}>
         <Icon name="gear" />
       </button>
     </header>
@@ -278,12 +284,15 @@
     {#if error}
       <div class="banner error" transition:slide={{ duration: 300, easing: cubicInOut }}>
         <span>{error}</span>
-        {#if location}<button onclick={refresh}>Retry</button>{/if}
+        {#if location}<button onclick={refresh}>{t("retry")}</button>{/if}
       </div>
     {:else if forecast?.fallback}
       <div class="banner notice" transition:slide={{ duration: 300, easing: cubicInOut }}>
         <span>
-          {PROVIDER_NAMES[config.provider]} is unavailable, showing {PROVIDER_NAMES[forecast.source]}.
+          {t("fallbackNotice", {
+            preferred: PROVIDER_NAMES[config.provider],
+            source: PROVIDER_NAMES[forecast.source],
+          })}
         </span>
       </div>
     {/if}
@@ -300,12 +309,12 @@
         <div class="hero-main">
           <div class="hero-temp">{Math.round(heroTemp.current)}°<small>{unitLetter()}</small></div>
           {#key selectedHour.weather.description}
-            <div class="hero-desc" in:rise={{ y: 6, duration: 350 }}>{selectedHour.weather.description}</div>
+            <div class="hero-desc" in:rise={{ y: 6, duration: 350 }}>{weatherText(selectedHour.weather.description)}</div>
           {/key}
           <div class="hero-meta">
-            {selectedDate === today ? "Today" : longDate(selectedDate)} · {hourOf(selectedHour)}
+            {selectedDate === today ? t("today") : longDate(selectedDate)} · {hourOf(selectedHour)}
             {#if hourKey(selectedHour) !== nowKey}
-              <button class="now-btn" onclick={() => (selected = nowIndex())} transition:rise={{ y: 4, duration: 250 }}>Now</button>
+              <button class="now-btn" onclick={() => (selected = nowIndex())} transition:rise={{ y: 4, duration: 250 }}>{t("nowButton")}</button>
             {/if}
           </div>
           {#if selectedDay}
@@ -344,18 +353,18 @@
         {#snippet footer()}
           <p class="credit">
             {#if forecast!.source === "met_norway"}
-              Weather data by MET Norway (CC BY 4.0)
+              {t("creditMet")}
             {:else}
-              Weather data by Open-Meteo.com
+              {t("creditOpenMeteo")}
             {/if}
           </p>
         {/snippet}
       </HourList>
     </section>
   {:else if loading}
-    <p class="placeholder">Loading forecast…</p>
+    <p class="placeholder">{t("loading")}</p>
   {:else if !location}
-    <p class="placeholder">Search a city or use 📍 GPS to get started.</p>
+    <p class="placeholder">{t("getStarted")}</p>
   {/if}
 </main>
 

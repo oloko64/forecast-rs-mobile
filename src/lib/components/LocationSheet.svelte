@@ -8,6 +8,7 @@
   import Sheet from "./Sheet.svelte";
   import Icon from "./Icon.svelte";
   import MapPicker from "./MapPicker.svelte";
+  import { t } from "$lib/i18n.svelte";
 
   let {
     current,
@@ -124,23 +125,23 @@
   }
 </script>
 
-<Sheet label="Choose location" {onclose}>
+<Sheet label={t("chooseLocation")} {onclose}>
   <div class="search">
     {#if mapOpen}
-      <button class="square" onclick={() => (mapOpen = false)} aria-label="Back to list" transition:slide={{ axis: "x", duration: 250, easing: cubicInOut }}>
+      <button class="square" onclick={() => (mapOpen = false)} aria-label={t("backToList")} transition:slide={{ axis: "x", duration: 250, easing: cubicInOut }}>
         <span class="back"><Icon name="chevron-down" /></span>
       </button>
     {/if}
     <input
       type="search"
-      placeholder={mapOpen ? "Search to move the map…" : "Search a city…"}
+      placeholder={mapOpen ? t("searchMap") : t("searchCity")}
       bind:value={query}
       oninput={onInput}
       onkeydown={(e) => e.key === "Enter" && (clearTimeout(timer), search())}
       autocomplete="off"
       enterkeyhint="search"
     />
-    <button class="square gps" onclick={useGps} disabled={gpsBusy} aria-label="Use my location">
+    <button class="square gps" onclick={useGps} disabled={gpsBusy} aria-label={t("useMyLocation")}>
       <span class:busy={gpsBusy}><Icon name="pin" /></span>
     </button>
   </div>
@@ -155,9 +156,9 @@
         {#if query.trim().length >= 2}
           <div class="overlay" transition:slide={{ duration: 250, easing: cubicInOut }}>
             {#if searching}
-              <p class="hint">Searching…</p>
+              <p class="hint">{t("searching")}</p>
             {:else if results.length === 0 && !error}
-              <p class="hint">No places found</p>
+              <p class="hint">{t("noPlaces")}</p>
             {/if}
             {#each results as r (`${r.lat},${r.lon}`)}
               <button class="pick" onclick={() => moveMapTo(r)}>
@@ -172,7 +173,7 @@
       <div class="spot">
         <div class="spot-text">
           {#if resolving}
-            <span class="label muted">Finding this place…</span>
+            <span class="label muted">{t("findingPlace")}</span>
             <span class="details">&nbsp;</span>
           {:else if spot}
             {#key `${spot.lat},${spot.lon}`}
@@ -180,10 +181,10 @@
               <span class="details" in:rise={{ y: 4, duration: 250 }}>{details(spot)}</span>
             {/key}
           {:else}
-            <span class="label muted">Move the map to place the pin</span>
+            <span class="label muted">{t("movePin")}</span>
           {/if}
         </div>
-        <button class="use" onclick={useSpot} disabled={!spot || resolving}>Use this location</button>
+        <button class="use" onclick={useSpot} disabled={!spot || resolving}>{t("useThisLocation")}</button>
       </div>
     </div>
   {:else}
@@ -191,25 +192,25 @@
       <button class="map-entry" onclick={() => openMap(null)}>
         <span class="map-glyph"><Icon name="pin" size={20} /></span>
         <span>
-          <span class="label">Pick on the map</span>
-          <span class="details">Place the pin exactly where you want</span>
+          <span class="label">{t("pickOnMap")}</span>
+          <span class="details">{t("pickOnMapHint")}</span>
         </span>
       </button>
 
       {#if query.trim().length >= 2}
-        <h3>Results</h3>
+        <h3>{t("results")}</h3>
         {#if searching}
-          <p class="hint">Searching…</p>
+          <p class="hint">{t("searching")}</p>
         {:else if results.length === 0 && !error}
-          <p class="hint">No places found</p>
+          <p class="hint">{t("noPlaces")}</p>
         {/if}
         {#each results as r (`${r.lat},${r.lon}`)}
           {@render item(r)}
         {/each}
       {:else}
-        <h3>Favorites</h3>
+        <h3>{t("favorites")}</h3>
         {#if favorites.length === 0}
-          <p class="hint">Tap ☆ on a place to keep it here.</p>
+          <p class="hint">{t("favoritesHint")}</p>
         {/if}
         {#each favorites as f (`${f.lat},${f.lon}`)}
           {@render item(f)}
@@ -225,10 +226,10 @@
       <span class="label">{label(l)}</span>
       <span class="details">{details(l)}</span>
     </button>
-    <button class="star map-btn" onclick={() => openMap(l)} aria-label="Adjust on map">
+    <button class="star map-btn" onclick={() => openMap(l)} aria-label={t("adjustOnMap")}>
       <Icon name="map" size={21} />
     </button>
-    <button class="star" onclick={() => ontogglefavorite(l)} aria-label="Toggle favorite">
+    <button class="star" onclick={() => ontogglefavorite(l)} aria-label={t("toggleFavorite")}>
       <Icon name={isFav(l) ? "star-filled" : "star"} size={22} />
     </button>
   </div>

@@ -11,12 +11,14 @@ Mobile sibling of [cli-forecast-rs](../forecast-rs): the Rust networking/config 
 - Map picker: open any result on a map and move it under the pin to place the location exactly; the spot is
   named via OpenStreetMap Nominatim and its timezone resolved via Open-Meteo. Maps by OpenFreeMap (MapLibre,
   no API key)
-- 3 / 7 / 10 / 16 day forecasts, pull to refresh, auto refresh while open (5 min to 2 h, default 15 min) and on
-  coming back when older than a set age (10 min to 2 h, default 30 min)
+- 3 / 7 / 10 / 16 day forecasts, pull to refresh, auto refresh while open (10 min to 2 h, default 15 min) and on
+  coming back when older than a set age (15 min to 2 h, default 30 min)
 - Settings: appearance (system / light / dark), color theme (Ocean, Forest, Sunset, each customizable),
   °C/°F, days, refresh intervals, weather provider
 - Two providers: Open-Meteo (default) and MET Norway. After 3 consecutive failures the other one is used
   for 10 minutes, and the app says so
+- English and Brazilian Portuguese (follows the phone by default, or pick one in settings); place names, dates,
+  decimals and coordinates are localized too
 - Remembers the last location, favorites and settings (`config.json` in the app data dir)
 
 ## Stack

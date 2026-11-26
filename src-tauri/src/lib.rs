@@ -67,17 +67,27 @@ async fn get_forecast(
 }
 
 #[tauri::command]
-async fn search_locations(query: String) -> Result<Vec<Location>, String> {
+async fn search_locations(
+    query: String,
+    language: Option<String>,
+) -> Result<Vec<Location>, String> {
     if query.trim().len() < 2 {
         return Ok(Vec::new());
     }
-    geocoding::search(&query).await.map_err(err)
+    geocoding::search(&query, language.as_deref())
+        .await
+        .map_err(err)
 }
 
 /// Names a point picked on the map and resolves its timezone.
 #[tauri::command]
-async fn describe_spot(lat: f64, lon: f64, fallback_timezone: Option<String>) -> Location {
-    spot::describe(lat, lon, fallback_timezone).await
+async fn describe_spot(
+    lat: f64,
+    lon: f64,
+    fallback_timezone: Option<String>,
+    language: Option<String>,
+) -> Location {
+    spot::describe(lat, lon, fallback_timezone, language.as_deref()).await
 }
 
 #[tauri::command]

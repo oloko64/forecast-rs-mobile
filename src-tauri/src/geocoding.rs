@@ -1,19 +1,24 @@
 use serde::Deserialize;
 
-use crate::{http::get_json, location::Location};
+use crate::{
+    http::get_json,
+    location::{Location, is_portuguese},
+};
 
 const GEOCODING_URL: &str = "https://geocoding-api.open-meteo.com/v1/search";
 const MAX_RESULTS: u32 = 10;
 
-/// Finds places whose name matches `query`, best matches first.
-pub(crate) async fn search(query: &str) -> anyhow::Result<Vec<Location>> {
+/// Finds places whose name matches `query`, best matches first, with names in
+/// `language` (English unless Portuguese).
+pub(crate) async fn search(query: &str, language: Option<&str>) -> anyhow::Result<Vec<Location>> {
+    let language = if is_portuguese(language) { "pt" } else { "en" };
     let response: SearchResponse = get_json(
         "Open-Meteo geocoding",
         GEOCODING_URL,
         &[
             ("name", query.trim().to_string()),
             ("count", MAX_RESULTS.to_string()),
-            ("language", "en".to_string()),
+            ("language", language.to_string()),
             ("format", "json".to_string()),
         ],
     )
