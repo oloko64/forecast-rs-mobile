@@ -32,6 +32,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import RefreshIcon from "$lib/components/RefreshIcon.svelte";
   import WeatherIcon from "$lib/components/WeatherIcon.svelte";
+  import Loader from "$lib/components/Loader.svelte";
   import DayStrip from "$lib/components/DayStrip.svelte";
   import HourChart from "$lib/components/HourChart.svelte";
   import HourList from "$lib/components/HourList.svelte";
@@ -62,6 +63,8 @@
   let forecast = $state<Forecast | null>(null);
   let fetchedAt = 0;
   let loading = $state(false);
+  /** Until the first forecast attempt (or the location prompt) on launch. */
+  let booting = $state(true);
   let error = $state<string | null>(null);
   let sheetOpen = $state(false);
   let settingsOpen = $state(false);
@@ -232,6 +235,7 @@
           sheetOpen = true;
         }
       }
+      booting = false;
     })();
 
     return () => {
@@ -361,8 +365,8 @@
         {/snippet}
       </HourList>
     </section>
-  {:else if loading}
-    <p class="placeholder">{t("loading")}</p>
+  {:else if booting || loading}
+    <Loader />
   {:else if !location}
     <p class="placeholder">{t("getStarted")}</p>
   {/if}
