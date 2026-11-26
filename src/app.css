@@ -50,6 +50,8 @@ button {
 html,
 body {
   height: 100%;
+  /* The page never scrolls as a whole: <main> and the sheets scroll inside. */
+  overflow: hidden;
 }
 body {
   margin: 0;

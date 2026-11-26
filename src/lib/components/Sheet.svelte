@@ -128,7 +128,8 @@
     bottom: 0;
     max-width: 640px;
     margin: 0 auto;
-    max-height: 88dvh;
+    /* Never taller than the space below the status bar (the keyboard shrinks dvh). */
+    max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - 16px));
     display: flex;
     flex-direction: column;
     background: var(--bg);
