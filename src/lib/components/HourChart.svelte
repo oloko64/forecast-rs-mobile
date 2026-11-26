@@ -177,8 +177,12 @@
         <line x1={selX} x2={selX} y1={TEMP_TOP - 12} y2={RAIN_BOTTOM} stroke="var(--fg)" stroke-opacity="0.25" stroke-dasharray="3 3" />
         <circle cx={selX} cy={selY} r="9" fill="var(--temp)" opacity="0.18" />
         <circle cx={selX} cy={selY} r="5" fill="var(--bg)" stroke="var(--temp)" stroke-width="2.5" />
-        <text x={Math.min(width - 24, Math.max(24, selX))} y={Math.max(14, selY - 14)} class="value"
+        <text x={Math.min(width - 30, Math.max(30, selX))} y={Math.max(14, selY - 14)} class="value"
           >{temp(sel.temperature)}</text
+        >
+        <!-- That hour's rain, under the point (same as the widget). -->
+        <text x={Math.min(width - 30, Math.max(30, selX))} y={Math.min(RAIN_BOTTOM - 6, selY + 22)} class="rain-value"
+          >{mm(sel.precipitation)} mm</text
         >
       {/if}
     </svg>
@@ -220,6 +224,15 @@
     font-weight: 700;
     fill: var(--fg);
     text-anchor: middle;
+  }
+  .rain-value {
+    font-size: 12px;
+    font-weight: 700;
+    fill: var(--rain);
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: var(--card);
+    stroke-width: 3px;
   }
   .legend {
     display: flex;
