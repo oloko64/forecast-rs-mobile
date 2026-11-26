@@ -1,8 +1,39 @@
 use chrono::{NaiveDate, NaiveDateTime};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+/// Where forecasts come from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Provider {
+    #[default]
+    OpenMeteo,
+    MetNorway,
+}
+
+impl Provider {
+    pub(crate) fn other(self) -> Self {
+        match self {
+            Self::OpenMeteo => Self::MetNorway,
+            Self::MetNorway => Self::OpenMeteo,
+        }
+    }
+}
+
+impl std::fmt::Display for Provider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::OpenMeteo => "Open-Meteo",
+            Self::MetNorway => "MET Norway",
+        })
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub(crate) struct ForecastResponse {
+    /// The provider that answered.
+    pub source: Provider,
+    /// Whether `source` is the fallback because the preferred provider kept failing.
+    pub fallback: bool,
     /// Offset of the forecast location's local time from UTC, in seconds.
     pub utc_offset_seconds: i32,
     /// IANA timezone Open-Meteo resolved for the location.

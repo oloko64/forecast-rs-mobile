@@ -115,7 +115,7 @@
     </svg>
     <div class="legend">
       <span><i class="dot temp"></i>Temperature</span>
-      <span><i class="dot rain"></i>Rain{#if rainPeak > 0} · max {mm(rainPeak)} mm/h{:else} · none{/if}</span>
+      <span><i class="dot rain"></i>{rainPeak > 0 ? `Rain · max ${mm(rainPeak)} mm/h` : "Rain · none"}</span>
     </div>
   {/if}
 </div>

@@ -8,6 +8,7 @@ const MAX_RESULTS: u32 = 10;
 /// Finds places whose name matches `query`, best matches first.
 pub(crate) async fn search(query: &str) -> anyhow::Result<Vec<Location>> {
     let response: SearchResponse = get_json(
+        "Open-Meteo geocoding",
         GEOCODING_URL,
         &[
             ("name", query.trim().to_string()),

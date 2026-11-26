@@ -2,24 +2,19 @@
   import type { Location } from "$lib/types";
   import { details, label, samePlace } from "$lib/format";
   import { gpsLocation, searchLocations } from "$lib/api";
+  import Sheet from "./Sheet.svelte";
 
   let {
     current,
     favorites,
-    days,
-    dayChoices,
     onpick,
     ontogglefavorite,
-    ondays,
     onclose,
   }: {
     current: Location | null;
     favorites: Location[];
-    days: number;
-    dayChoices: number[];
     onpick: (location: Location) => void;
     ontogglefavorite: (location: Location) => void;
-    ondays: (days: number) => void;
     onclose: () => void;
   } = $props();
 
@@ -70,11 +65,7 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="backdrop" onclick={onclose}></div>
-<div class="sheet" role="dialog" aria-label="Choose location">
-  <div class="grip"></div>
+<Sheet label="Choose location" {onclose}>
 
   <div class="search">
     <!-- svelte-ignore a11y_autofocus -->
@@ -113,16 +104,9 @@
       {#each favorites as f (`${f.lat},${f.lon}`)}
         {@render item(f)}
       {/each}
-
-      <h3>Days to forecast</h3>
-      <div class="days">
-        {#each dayChoices as d}
-          <button class:active={d === days} onclick={() => ondays(d)}>{d}</button>
-        {/each}
-      </div>
     {/if}
   </div>
-</div>
+</Sheet>
 
 {#snippet item(l: Location)}
   <div class="item" class:current={current && samePlace(current, l)}>
@@ -137,34 +121,6 @@
 {/snippet}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgb(0 0 0 / 0.45);
-    z-index: 10;
-    animation: fade 0.15s ease-out;
-  }
-  .sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: 85dvh;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    border-radius: 20px 20px 0 0;
-    padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
-    z-index: 11;
-    animation: up 0.2s ease-out;
-  }
-  .grip {
-    width: 40px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--line);
-    margin: 0 auto 10px;
-  }
   .search {
     display: flex;
     gap: 8px;
@@ -245,34 +201,5 @@
     border: none;
     background: none;
     color: var(--star);
-  }
-  .days {
-    display: flex;
-    gap: 8px;
-  }
-  .days button {
-    flex: 1;
-    padding: 10px 0;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: var(--card);
-    color: var(--fg);
-    font: inherit;
-    font-weight: 600;
-  }
-  .days button.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--on-accent);
-  }
-  @keyframes up {
-    from {
-      transform: translateY(100%);
-    }
-  }
-  @keyframes fade {
-    from {
-      opacity: 0;
-    }
   }
 </style>

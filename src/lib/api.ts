@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Config, Forecast, Location } from "./types";
+import type { Config, Forecast, Location, SettingsPatch } from "./types";
 
 export const getForecast = (location: Location, days: number) =>
   invoke<Forecast>("get_forecast", { location, days });
@@ -12,7 +12,8 @@ export const setLastLocation = (location: Location) =>
   invoke<Config>("set_last_location", { location });
 export const toggleFavorite = (location: Location) =>
   invoke<Config>("toggle_favorite", { location });
-export const setDays = (days: number) => invoke<Config>("set_days", { days });
+export const updateSettings = (patch: SettingsPatch) =>
+  invoke<Config>("update_settings", { patch });
 export const dayChoices = () => invoke<number[]>("day_choices");
 
 /** Current position as a Location. Only works on Android/iOS. */
@@ -45,7 +46,8 @@ export async function gpsLocation(): Promise<Location> {
     name: "My location",
     lat: round(pos.coords.latitude),
     lon: round(pos.coords.longitude),
-    timezone: "auto",
+    // The phone is there, so its timezone is the location's.
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "auto",
   };
 }
 

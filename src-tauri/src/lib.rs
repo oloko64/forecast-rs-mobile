@@ -1,7 +1,9 @@
 mod config;
+mod fallback;
 mod geocoding;
 mod http;
 mod location;
+mod metno;
 mod openmeteo;
 mod types;
 
@@ -9,7 +11,12 @@ use std::{path::PathBuf, sync::Mutex};
 
 use tauri::{Manager, State};
 
-use crate::{config::Config, location::Location, types::ForecastResponse};
+use crate::{
+    config::{Config, SettingsPatch},
+    fallback::Fallback,
+    location::Location,
+    types::{ForecastResponse, Provider},
+};
 
 /// The config and where it lives. Every mutation is saved right away.
 struct ConfigStore {
@@ -31,9 +38,31 @@ fn err(e: anyhow::Error) -> String {
     format!("{e:#}")
 }
 
+async fn fetch_from(
+    provider: Provider,
+    location: &Location,
+    days: u32,
+) -> anyhow::Result<ForecastResponse> {
+    match provider {
+        Provider::OpenMeteo => openmeteo::fetch_forecast(location, days).await,
+        Provider::MetNorway => metno::fetch_forecast(location, days).await,
+    }
+}
+
+/// Uses the provider chosen in the settings, falling back to the other one
+/// after 3 consecutive failures.
 #[tauri::command]
-async fn get_forecast(location: Location, days: u32) -> Result<ForecastResponse, String> {
-    openmeteo::fetch_forecast(&location, days).await.map_err(err)
+async fn get_forecast(
+    store: State<'_, ConfigStore>,
+    fallback: State<'_, Fallback>,
+    location: Location,
+    days: u32,
+) -> Result<ForecastResponse, String> {
+    let preferred = store.config.lock().map_err(|e| e.to_string())?.provider;
+    fallback
+        .fetch(preferred, |p| fetch_from(p, &location, days))
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -46,7 +75,11 @@ async fn search_locations(query: String) -> Result<Vec<Location>, String> {
 
 #[tauri::command]
 fn load_config(store: State<'_, ConfigStore>) -> Result<Config, String> {
-    store.config.lock().map(|c| c.clone()).map_err(|e| e.to_string())
+    store
+        .config
+        .lock()
+        .map(|c| c.clone())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -60,8 +93,15 @@ fn toggle_favorite(store: State<'_, ConfigStore>, location: Location) -> Result<
 }
 
 #[tauri::command]
-fn set_days(store: State<'_, ConfigStore>, days: u32) -> Result<Config, String> {
-    store.update(|c| c.set_days(days))
+fn update_settings(
+    store: State<'_, ConfigStore>,
+    fallback: State<'_, Fallback>,
+    patch: SettingsPatch,
+) -> Result<Config, String> {
+    if patch.provider.is_some() {
+        fallback.reset();
+    }
+    store.update(|c| c.apply(patch))
 }
 
 #[tauri::command]
@@ -83,6 +123,7 @@ pub fn run() {
                 eprintln!("Ignoring config: {e:#}");
                 Config::default()
             });
+            app.manage(Fallback::default());
             app.manage(ConfigStore {
                 path,
                 config: Mutex::new(config),
@@ -95,7 +136,7 @@ pub fn run() {
             load_config,
             set_last_location,
             toggle_favorite,
-            set_days,
+            update_settings,
             day_choices,
         ])
         .run(tauri::generate_context!())

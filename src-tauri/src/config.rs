@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::{location::Location, openmeteo::MAX_FORECAST_DAYS};
+use crate::{location::Location, openmeteo::MAX_FORECAST_DAYS, types::Provider};
 
 pub(crate) const FILE_NAME: &str = "config.json";
 
@@ -20,6 +20,40 @@ pub(crate) struct Config {
     /// How many days to forecast, today included.
     #[serde(default = "default_days")]
     pub days: u32,
+    #[serde(default)]
+    pub theme_mode: ThemeMode,
+    #[serde(default)]
+    pub palette: Palette,
+    /// Preferred forecast provider; the other one is the fallback.
+    #[serde(default)]
+    pub provider: Provider,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ThemeMode {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Palette {
+    #[default]
+    Ocean,
+    Forest,
+    Sunset,
+}
+
+/// Settings changed from the settings sheet; missing fields stay as they are.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct SettingsPatch {
+    pub days: Option<u32>,
+    pub theme_mode: Option<ThemeMode>,
+    pub palette: Option<Palette>,
+    pub provider: Option<Provider>,
 }
 
 impl Default for Config {
@@ -28,6 +62,9 @@ impl Default for Config {
             last_location: None,
             favorites: Vec::new(),
             days: DEFAULT_DAYS,
+            theme_mode: ThemeMode::default(),
+            palette: Palette::default(),
+            provider: Provider::default(),
         }
     }
 }
@@ -60,12 +97,22 @@ impl Config {
         let tmp: PathBuf = path.with_extension("json.tmp");
         std::fs::write(&tmp, serde_json::to_string_pretty(self)?)
             .with_context(|| format!("Failed to write {}", tmp.display()))?;
-        std::fs::rename(&tmp, path)
-            .with_context(|| format!("Failed to replace {}", path.display()))
+        std::fs::rename(&tmp, path).with_context(|| format!("Failed to replace {}", path.display()))
     }
 
-    pub(crate) fn set_days(&mut self, days: u32) {
-        self.days = days.clamp(1, MAX_FORECAST_DAYS);
+    pub(crate) fn apply(&mut self, patch: SettingsPatch) {
+        if let Some(days) = patch.days {
+            self.days = days.clamp(1, MAX_FORECAST_DAYS);
+        }
+        if let Some(mode) = patch.theme_mode {
+            self.theme_mode = mode;
+        }
+        if let Some(palette) = patch.palette {
+            self.palette = palette;
+        }
+        if let Some(provider) = patch.provider {
+            self.provider = provider;
+        }
     }
 
     pub(crate) fn is_favorite(&self, location: &Location) -> bool {
@@ -91,8 +138,10 @@ mod tests {
 
     impl TempDir {
         fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir()
-                .join(format!("forecast-mobile-test-{name}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "forecast-mobile-test-{name}-{}",
+                std::process::id()
+            ));
             let _ = std::fs::remove_dir_all(&dir);
             Self(dir)
         }
@@ -121,6 +170,9 @@ mod tests {
             last_location: Some(place("Lisbon", 38.7, -9.1)),
             favorites: vec![place("Lisbon", 38.7, -9.1)],
             days: 10,
+            theme_mode: ThemeMode::Dark,
+            palette: Palette::Sunset,
+            provider: Provider::MetNorway,
         };
         config.save_to(&dir.file()).unwrap();
         assert_eq!(Config::load_from(&dir.file()).unwrap(), config);
@@ -138,8 +190,34 @@ mod tests {
         assert_eq!(Config::load_from(&dir.file()).unwrap().days, 16);
 
         let mut config = Config::default();
-        config.set_days(0);
+        config.apply(SettingsPatch {
+            days: Some(0),
+            ..SettingsPatch::default()
+        });
         assert_eq!(config.days, 1);
+    }
+
+    #[test]
+    fn older_configs_get_default_settings() {
+        let dir = TempDir::new("older");
+        std::fs::create_dir_all(&dir.0).unwrap();
+        std::fs::write(dir.file(), r#"{"favorites":[],"days":3}"#).unwrap();
+        let config = Config::load_from(&dir.file()).unwrap();
+        assert_eq!(config.theme_mode, ThemeMode::System);
+        assert_eq!(config.palette, Palette::Ocean);
+        assert_eq!(config.provider, Provider::OpenMeteo);
+    }
+
+    #[test]
+    fn patch_changes_only_given_fields() {
+        let mut config = Config::default();
+        let patch: SettingsPatch =
+            serde_json::from_str(r#"{"theme_mode":"dark","provider":"met_norway"}"#).unwrap();
+        config.apply(patch);
+        assert_eq!(config.theme_mode, ThemeMode::Dark);
+        assert_eq!(config.provider, Provider::MetNorway);
+        assert_eq!(config.palette, Palette::Ocean);
+        assert_eq!(config.days, 7);
     }
 
     #[test]

@@ -1,0 +1,61 @@
+/*
+ * Theme tokens. `color-scheme` picks the light or dark side of every light-dark():
+ * system by default, forced with <html data-theme="light|dark">.
+ * Palettes (<html data-palette>) set the accent (main), temperature (secondary)
+ * and rain colors.
+ */
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#f4f6fa, #0f141d);
+  --card: light-dark(#ffffff, #182030);
+  --fg: light-dark(#172033, #e9eef7);
+  --muted: light-dark(#66728a, #8e9ab0);
+  --line: light-dark(#e1e6ef, #263147);
+  --on-accent: light-dark(#ffffff, #0b1020);
+  --star: light-dark(#e0a10e, #ffc93d);
+  --error: light-dark(#d93a3a, #ff6b6b);
+
+  /* Ocean (default) */
+  --accent: light-dark(#3867f0, #6b8cff);
+  --temp: light-dark(#f08a24, #ffa14a);
+  --rain: light-dark(#2f8ff5, #5aa9ff);
+
+  --highlight: color-mix(in srgb, var(--accent) 14%, var(--card));
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-palette="forest"] {
+  --accent: light-dark(#23845a, #5cc98d);
+  --temp: light-dark(#d4900c, #f2c14e);
+  --rain: light-dark(#1f8aa3, #4fc3d9);
+}
+:root[data-palette="sunset"] {
+  --accent: light-dark(#c2417a, #ff7eb3);
+  --temp: light-dark(#ea5f2b, #ff8f66);
+  --rain: light-dark(#6a5acd, #a597ff);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  font-size: 15px;
+  overscroll-behavior: none;
+}

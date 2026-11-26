@@ -1,18 +1,27 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import * as api from "$lib/api";
-  import type { Config, Forecast, Location } from "$lib/types";
+  import { PROVIDER_NAMES, type Config, type Forecast, type Location, type SettingsPatch } from "$lib/types";
+  import { applyTheme } from "$lib/theme";
   import { dateOf, hourKey, hourOf, label, longDate, mm, nowHourKey, samePlace, temp } from "$lib/format";
   import DayStrip from "$lib/components/DayStrip.svelte";
   import HourChart from "$lib/components/HourChart.svelte";
   import HourList from "$lib/components/HourList.svelte";
   import LocationSheet from "$lib/components/LocationSheet.svelte";
+  import SettingsSheet from "$lib/components/SettingsSheet.svelte";
 
   /** Refresh automatically when the app comes back after this long. */
   const STALE_MS = 30 * 60 * 1000;
   const PULL_TRIGGER = 70;
 
-  let config = $state<Config>({ last_location: null, favorites: [], days: 7 });
+  let config = $state<Config>({
+    last_location: null,
+    favorites: [],
+    days: 7,
+    theme_mode: "system",
+    palette: "ocean",
+    provider: "open_meteo",
+  });
   let dayChoices = $state<number[]>([3, 7, 10, 16]);
   let location = $state<Location | null>(null);
   let forecast = $state<Forecast | null>(null);
@@ -20,6 +29,7 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let sheetOpen = $state(false);
+  let settingsOpen = $state(false);
   /** Index into forecast.hourly. */
   let selected = $state(0);
   let clock = $state(Date.now());
@@ -77,9 +87,18 @@
     }
   }
 
-  async function changeDays(days: number) {
-    config = await api.setDays(days);
-    if (location) await load(location, { keepSelection: true });
+  $effect(() => applyTheme(config.theme_mode, config.palette));
+
+  async function changeSettings(patch: SettingsPatch) {
+    const before = config;
+    try {
+      config = await api.updateSettings(patch);
+    } catch (e) {
+      error = String(e);
+      return;
+    }
+    const refetch = config.days !== before.days || config.provider !== before.provider;
+    if (refetch && location) await load(location, { keepSelection: true });
   }
 
   function selectDay(date: string) {
@@ -95,7 +114,9 @@
   let pullStart: number | null = null;
   let pull = $state(0);
   function touchStart(e: TouchEvent) {
-    pullStart = window.scrollY <= 0 && !sheetOpen ? e.touches[0].clientY : null;
+    // The hour list scrolls on its own: pulling there must not refresh.
+    const inList = (e.target as Element | null)?.closest?.(".hours");
+    pullStart = !inList && !sheetOpen && !settingsOpen ? e.touches[0].clientY : null;
   }
   function touchMove(e: TouchEvent) {
     if (pullStart === null) return;
@@ -144,61 +165,80 @@
 <svelte:window ontouchstart={touchStart} ontouchmove={touchMove} ontouchend={touchEnd} />
 
 <main>
-  <div class="pull" style:height="{pull}px" style:opacity={pull / PULL_TRIGGER}>
-    <span class:ready={pull >= PULL_TRIGGER}>↻</span>
-  </div>
-
-  <header>
-    <button class="place" onclick={() => (sheetOpen = true)}>
-      <span class="name">{location ? location.name : "Choose a location"} <span class="caret">▾</span></span>
-      {#if location}<span class="sub">{label(location).split(", ").slice(1).join(", ") || forecast?.timezone}</span>{/if}
-    </button>
-    {#if location}
-      <button class="icon-btn star" onclick={() => toggleFavorite(location!)} aria-label="Toggle favorite">
-        {isFavorite ? "★" : "☆"}
-      </button>
-    {/if}
-    <button class="icon-btn" class:spin={loading} onclick={refresh} disabled={!location} aria-label="Refresh">↻</button>
-  </header>
-
-  {#if error}
-    <div class="banner">
-      <span>{error}</span>
-      {#if location}<button onclick={refresh}>Retry</button>{/if}
+  <div class="top">
+    <div class="pull" style:height="{pull}px" style:opacity={pull / PULL_TRIGGER}>
+      <span class:ready={pull >= PULL_TRIGGER}>↻</span>
     </div>
-  {/if}
 
-  {#if forecast && selectedHour}
-    <section class="hero">
-      <div class="big-icon">{selectedHour.weather.icon}</div>
-      <div class="hero-main">
-        <div class="hero-temp">{temp(selectedHour.temperature)}</div>
-        <div class="hero-desc">{selectedHour.weather.description}</div>
-        <div class="hero-meta">
-          {selectedDate === today ? "Today" : longDate(selectedDate)} · {hourOf(selectedHour)}
-          {#if hourKey(selectedHour) !== nowKey}
-            <button class="now-btn" onclick={() => (selected = nowIndex())}>Now</button>
+    <header>
+      <button class="place" onclick={() => (sheetOpen = true)}>
+        <span class="name">{location ? location.name : "Choose a location"} <span class="caret">▾</span></span>
+        {#if location}<span class="sub">{label(location).split(", ").slice(1).join(", ") || forecast?.timezone}</span>{/if}
+      </button>
+      {#if location}
+        <button class="icon-btn star" onclick={() => toggleFavorite(location!)} aria-label="Toggle favorite">
+          {isFavorite ? "★" : "☆"}
+        </button>
+      {/if}
+      <button class="icon-btn" class:spin={loading} onclick={refresh} disabled={!location} aria-label="Refresh">↻</button>
+      <button class="icon-btn" onclick={() => (settingsOpen = true)} aria-label="Settings">⚙</button>
+    </header>
+
+    {#if error}
+      <div class="banner error">
+        <span>{error}</span>
+        {#if location}<button onclick={refresh}>Retry</button>{/if}
+      </div>
+    {:else if forecast?.fallback}
+      <div class="banner notice">
+        <span>
+          {PROVIDER_NAMES[config.provider]} is unavailable, showing {PROVIDER_NAMES[forecast.source]}.
+        </span>
+      </div>
+    {/if}
+
+    {#if forecast && selectedHour}
+      <section class="hero">
+        <div class="big-icon">{selectedHour.weather.icon}</div>
+        <div class="hero-main">
+          <div class="hero-temp">{temp(selectedHour.temperature)}</div>
+          <div class="hero-desc">{selectedHour.weather.description}</div>
+          <div class="hero-meta">
+            {selectedDate === today ? "Today" : longDate(selectedDate)} · {hourOf(selectedHour)}
+            {#if hourKey(selectedHour) !== nowKey}
+              <button class="now-btn" onclick={() => (selected = nowIndex())}>Now</button>
+            {/if}
+          </div>
+          {#if selectedDay}
+            <div class="hero-meta">
+              ↑ {temp(selectedDay.temperature_max)} ↓ {temp(selectedDay.temperature_min)} · 💧 {mm(selectedDay.precipitation)} mm
+            </div>
           {/if}
         </div>
-        {#if selectedDay}
-          <div class="hero-meta">
-            ↑ {temp(selectedDay.temperature_max)} ↓ {temp(selectedDay.temperature_min)} · 💧 {mm(selectedDay.precipitation)} mm
-          </div>
-        {/if}
-      </div>
+      </section>
+
+      <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
+
+      <section class="card">
+        <HourChart hours={dayHours} selected={selected - dayStart} onselect={(i) => (selected = dayStart + i)} />
+      </section>
+    {/if}
+  </div>
+
+  {#if forecast && selectedHour}
+    <section class="card hours">
+      <HourList hours={dayHours} selected={selected - dayStart} {nowKey} onselect={(i) => (selected = dayStart + i)}>
+        {#snippet footer()}
+          <p class="credit">
+            {#if forecast!.source === "met_norway"}
+              Weather data by MET Norway (CC BY 4.0)
+            {:else}
+              Weather data by Open-Meteo.com
+            {/if}
+          </p>
+        {/snippet}
+      </HourList>
     </section>
-
-    <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
-
-    <section class="card">
-      <HourChart hours={dayHours} selected={selected - dayStart} onselect={(i) => (selected = dayStart + i)} />
-    </section>
-
-    <section class="card list">
-      <HourList hours={dayHours} selected={selected - dayStart} {nowKey} onselect={(i) => (selected = dayStart + i)} />
-    </section>
-
-    <footer>Weather data by Open-Meteo.com</footer>
   {:else if loading}
     <p class="placeholder">Loading forecast…</p>
   {:else if !location}
@@ -210,68 +250,43 @@
   <LocationSheet
     current={location}
     favorites={config.favorites}
-    days={config.days}
-    {dayChoices}
     onpick={pick}
     ontogglefavorite={toggleFavorite}
-    ondays={changeDays}
     onclose={() => (sheetOpen = false)}
   />
 {/if}
 
+{#if settingsOpen}
+  <SettingsSheet {config} {dayChoices} onchange={changeSettings} onclose={() => (settingsOpen = false)} />
+{/if}
+
 <style>
-  :global(:root) {
-    --bg: #f4f6fa;
-    --card: #ffffff;
-    --fg: #172033;
-    --muted: #66728a;
-    --line: #e1e6ef;
-    --highlight: #e8eefc;
-    --accent: #3867f0;
-    --on-accent: #ffffff;
-    --temp: #f08a24;
-    --rain: #2f8ff5;
-    --star: #f2b01e;
-    --error: #d93a3a;
-    color-scheme: light;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(:root) {
-      --bg: #0f141d;
-      --card: #182030;
-      --fg: #e9eef7;
-      --muted: #8e9ab0;
-      --line: #263147;
-      --highlight: #22304d;
-      --accent: #6b8cff;
-      --on-accent: #0b1020;
-      --temp: #ffa14a;
-      --rain: #5aa9ff;
-      --star: #ffc93d;
-      --error: #ff6b6b;
-      color-scheme: dark;
-    }
-  }
-  :global(*) {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-  }
-  :global(button) {
-    cursor: pointer;
-  }
-  :global(body) {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
-    font-size: 15px;
-    overscroll-behavior-y: contain;
-  }
+  /* Top part stays put; the hour list fills the rest and scrolls on its own. */
   main {
     max-width: 640px;
+    height: 100dvh;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
     padding-top: env(safe-area-inset-top);
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    overflow-y: auto;
+  }
+  .top {
+    flex: none;
+  }
+  .hours {
+    flex: 1 0 240px;
+    min-height: 240px;
+    padding: 0;
+    margin-bottom: 12px;
+  }
+  .credit {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 12px;
+    margin: 0;
   }
   .pull {
     display: flex;
@@ -349,9 +364,15 @@
     margin: 8px 16px;
     padding: 10px 14px;
     border-radius: 12px;
+    font-size: 14px;
+  }
+  .banner.error {
     background: color-mix(in srgb, var(--error) 15%, var(--card));
     color: var(--error);
-    font-size: 14px;
+  }
+  .banner.notice {
+    background: color-mix(in srgb, var(--temp) 15%, var(--card));
+    color: var(--fg);
   }
   .banner span {
     flex: 1;
@@ -368,14 +389,14 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 8px 16px 16px;
+    padding: 4px 16px 10px;
   }
   .big-icon {
-    font-size: 72px;
+    font-size: 64px;
     line-height: 1;
   }
   .hero-temp {
-    font-size: 52px;
+    font-size: 46px;
     font-weight: 300;
     line-height: 1;
   }
@@ -409,19 +430,10 @@
     padding: 12px 0;
     overflow: hidden;
   }
-  .card.list {
-    padding: 0;
-  }
   .placeholder {
     text-align: center;
     color: var(--muted);
     margin-top: 30vh;
     padding: 0 24px;
-  }
-  footer {
-    text-align: center;
-    font-size: 11px;
-    color: var(--muted);
-    padding: 12px;
   }
 </style>

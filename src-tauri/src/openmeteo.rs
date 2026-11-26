@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::{
     http::get_json,
     location::Location,
-    types::{DayForecast, ForecastResponse, HourForecast, Weather, WeatherKind},
+    types::{DayForecast, ForecastResponse, HourForecast, Provider, Weather, WeatherKind},
 };
 
 const FORECAST_URL: &str = "https://api.open-meteo.com/v1/forecast";
@@ -18,6 +18,7 @@ pub(crate) async fn fetch_forecast(
     days: u32,
 ) -> anyhow::Result<ForecastResponse> {
     let response: OpenMeteoResponse = get_json(
+        "Open-Meteo",
         FORECAST_URL,
         &[
             ("latitude", location.lat.to_string()),
@@ -122,6 +123,8 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
             .collect::<anyhow::Result<_>>()?;
 
         Ok(ForecastResponse {
+            source: Provider::OpenMeteo,
+            fallback: false,
             utc_offset_seconds,
             timezone,
             daily,
@@ -131,7 +134,7 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
 }
 
 /// Decodes a WMO weather interpretation code, as returned by Open-Meteo.
-fn decode_weather(code: u32) -> Weather {
+pub(crate) fn decode_weather(code: u32) -> Weather {
     use WeatherKind::{Clear, Cloudy, Fog, Rain, Snow, Storm, Unknown};
 
     let (description, icon, kind) = match code {
@@ -250,13 +253,20 @@ mod tests {
 
     #[test]
     fn missing_probability_series_is_fine() {
-        let json = FIXTURE.replace(r#""precipitation_probability": [5, null]"#, r#""unused": []"#);
+        let json = FIXTURE.replace(
+            r#""precipitation_probability": [5, null]"#,
+            r#""unused": []"#,
+        );
         assert!(!json.contains("probability"));
-        let forecast = ForecastResponse::try_from(
-            serde_json::from_str::<OpenMeteoResponse>(&json).unwrap(),
-        )
-        .unwrap();
-        assert!(forecast.hourly.iter().all(|h| h.precipitation_probability.is_none()));
+        let forecast =
+            ForecastResponse::try_from(serde_json::from_str::<OpenMeteoResponse>(&json).unwrap())
+                .unwrap();
+        assert!(
+            forecast
+                .hourly
+                .iter()
+                .all(|h| h.precipitation_probability.is_none())
+        );
     }
 
     /// Hits the real API over rustls: `cargo test -- --ignored`.
@@ -268,6 +278,10 @@ mod tests {
         let forecast = fetch_forecast(&places[0], 3).await.unwrap();
         assert_eq!(forecast.daily.len(), 3);
         assert_eq!(forecast.hourly.len(), 72);
+
+        let met = crate::metno::fetch_forecast(&places[0], 3).await.unwrap();
+        assert_eq!(met.timezone, "America/Sao_Paulo");
+        assert!(!met.hourly.is_empty() && met.daily.len() <= 3);
     }
 
     #[test]
@@ -304,7 +318,11 @@ mod tests {
             85, 86, 95, 96, 99,
         ];
         for code in documented {
-            assert_ne!(decode_weather(code).kind, WeatherKind::Unknown, "code {code}");
+            assert_ne!(
+                decode_weather(code).kind,
+                WeatherKind::Unknown,
+                "code {code}"
+            );
         }
         assert_eq!(decode_weather(4).kind, WeatherKind::Unknown);
     }

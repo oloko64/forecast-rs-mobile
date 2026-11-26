@@ -17,12 +17,14 @@
   let strip: HTMLDivElement;
 
   $effect(() => {
-    // Keep the selected chip visible when it changes (e.g. hour navigation crosses days).
-    strip?.querySelector<HTMLElement>(`[data-date="${selected}"]`)?.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    // Center the selected chip. Scrolls the strip only, never the page.
+    const chip = strip?.querySelector<HTMLElement>(`[data-date="${selected}"]`);
+    if (chip) {
+      strip.scrollTo({
+        left: chip.offsetLeft - (strip.clientWidth - chip.offsetWidth) / 2,
+        behavior: "smooth",
+      });
+    }
   });
 </script>
 
@@ -46,6 +48,7 @@
 
 <style>
   .strip {
+    position: relative;
     display: flex;
     gap: 8px;
     overflow-x: auto;

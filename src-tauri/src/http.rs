@@ -3,7 +3,10 @@ use std::{sync::OnceLock, time::Duration};
 use anyhow::{Context, bail};
 use serde::{Deserialize, de::DeserializeOwned};
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+/// Short, so retries and the fallback provider kick in quickly.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// MET Norway rejects requests without an identifying User-Agent.
+const USER_AGENT: &str = concat!("forecast-mobile/", env!("CARGO_PKG_VERSION"));
 
 /// One shared client, trusting the bundled Mozilla root certificates.
 fn client() -> anyhow::Result<&'static reqwest::Client> {
@@ -25,6 +28,7 @@ fn client() -> anyhow::Result<&'static reqwest::Client> {
 
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
+        .user_agent(USER_AGENT)
         .tls_backend_preconfigured(tls)
         .build()
         .context("Failed to build HTTP client")?;
@@ -32,8 +36,9 @@ fn client() -> anyhow::Result<&'static reqwest::Client> {
     Ok(CLIENT.get_or_init(|| client))
 }
 
-/// Sends a GET request to an Open-Meteo API and decodes the JSON response.
+/// Sends a GET request to a weather API and decodes the JSON response.
 pub(crate) async fn get_json<T: DeserializeOwned>(
+    service: &str,
     url: &str,
     query: &[(&str, String)],
 ) -> anyhow::Result<T> {
@@ -42,20 +47,21 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
         .query(query)
         .send()
         .await
-        .context("Failed to reach Open-Meteo")?;
+        .with_context(|| format!("Failed to reach {service}"))?;
 
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         // Open-Meteo explains errors as {"error": true, "reason": "..."}
         let reason = serde_json::from_str::<ApiError>(&body).map_or(body, |e| e.reason);
-        bail!("Open-Meteo request failed: HTTP {status}: {reason}");
+        let reason: String = reason.chars().take(200).collect();
+        bail!("{service} request failed: HTTP {status}: {reason}");
     }
 
     response
         .json()
         .await
-        .context("Failed to decode Open-Meteo response")
+        .with_context(|| format!("Failed to decode {service} response"))
 }
 
 #[derive(Debug, Deserialize)]
