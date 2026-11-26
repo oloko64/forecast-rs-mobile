@@ -2,6 +2,7 @@
   import type { HourForecast } from "$lib/types";
   import { hourOf, mm, temp } from "$lib/format";
   import { Tween } from "svelte/motion";
+  import { untrack } from "svelte";
   import { t } from "$lib/i18n.svelte";
   import { cubicInOut } from "svelte/easing";
 
@@ -42,7 +43,9 @@
   const selT = new Tween(0, MOTION);
   $effect(() => {
     // Tweening needs equal lengths (MET Norway days can be partial): jump otherwise.
-    const same = tempsT.current.length === target.length;
+    // untrack: reading the animated value must not re-run this effect, or every
+    // frame would restart the tween and it would never reach the new day.
+    const same = untrack(() => tempsT.current.length) === target.length;
     tempsT.set(target, same ? MOTION : { duration: 0 });
     rainT.set(rainTarget, same ? MOTION : { duration: 0 });
   });
@@ -52,8 +55,10 @@
   });
   const temps = $derived(tempsT.current.length === n ? tempsT.current : target);
   const rains = $derived(rainT.current.length === n ? rainT.current : rainTarget);
-  const tMin = $derived(Math.min(...target));
-  const tMax = $derived(Math.max(...target));
+  // Scale over both the new values and the ones still morphing towards them,
+  // so nothing leaves the chart mid-animation.
+  const tMin = $derived(Math.min(...target, ...temps));
+  const tMax = $derived(Math.max(...target, ...temps));
   const y = (t: number) => {
     const span = Math.max(tMax - tMin, 2);
     const mid = (tMax + tMin) / 2;
@@ -77,7 +82,7 @@
   const area = $derived(n ? `${line}L${x(n - 1)},${TEMP_BOTTOM + 8}L${x(0)},${TEMP_BOTTOM + 8}Z` : "");
 
   const rainPeak = $derived(Math.max(0, ...hours.map((h) => h.precipitation)));
-  const rainMax = $derived(Math.max(1, rainPeak));
+  const rainMax = $derived(Math.max(1, rainPeak, ...rains));
   const barW = $derived(Math.max(2, step * 0.6));
   const rainH = (p: number) => (p <= 0 ? 0 : Math.max(2, (p / rainMax) * (RAIN_BOTTOM - RAIN_TOP)));
 
