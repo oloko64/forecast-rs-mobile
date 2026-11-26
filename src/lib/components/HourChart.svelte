@@ -11,6 +11,7 @@
     selected,
     onselect,
     onscrub,
+    fill = false,
   }: {
     hours: HourForecast[];
     /** Index into `hours`. */
@@ -18,17 +19,22 @@
     onselect: (index: number) => void;
     /** True while the user drags across the chart. */
     onscrub?: (scrubbing: boolean) => void;
+    /** Grow to the container's height (landscape) instead of a fixed height. */
+    fill?: boolean;
   } = $props();
 
   let scrubbing = false;
 
   let width = $state(320);
-  const H = 190;
+  let boxHeight = $state(0);
+  let legendHeight = $state(22);
+  const H = $derived(fill && boxHeight > 0 ? Math.max(100, boxHeight - legendHeight) : 190);
   const PAD_X = 18;
+  // Layout of the default 190 px chart, scaled to the actual height.
   const TEMP_TOP = 30;
-  const TEMP_BOTTOM = 118;
-  const RAIN_TOP = 132;
-  const RAIN_BOTTOM = 166;
+  const TEMP_BOTTOM = $derived(H * (118 / 190));
+  const RAIN_TOP = $derived(H * (132 / 190));
+  const RAIN_BOTTOM = $derived(H - 24);
 
   const n = $derived(hours.length);
   const step = $derived(n > 1 ? (width - 2 * PAD_X) / (n - 1) : 0);
@@ -118,7 +124,7 @@
   }
 </script>
 
-<div class="chart" bind:clientWidth={width}>
+<div class="chart" class:fill bind:clientWidth={width} bind:clientHeight={boxHeight}>
   {#if n > 0}
     <svg
       {width}
@@ -176,7 +182,7 @@
         >
       {/if}
     </svg>
-    <div class="legend">
+    <div class="legend" bind:clientHeight={legendHeight}>
       <span><i class="dot temp"></i>{t("temperature")}</span>
       <span><i class="dot rain"></i>{rainPeak > 0 ? t("rainMax", { value: mm(rainPeak) }) : t("rainNone")}</span>
     </div>
@@ -187,6 +193,10 @@
   .chart {
     width: 100%;
     touch-action: pan-y;
+  }
+  .chart.fill {
+    height: 100%;
+    overflow: hidden;
   }
   svg {
     display: block;

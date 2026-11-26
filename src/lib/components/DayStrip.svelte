@@ -17,20 +17,23 @@
   } = $props();
 
   let strip: HTMLDivElement;
+  let stripWidth = $state(0);
+  let placed = false;
 
   $effect(() => {
-    // Center the selected chip. Scrolls the strip only, never the page.
+    // Center the selected chip; again when the strip's width changes (rotation).
+    // Scrolls the strip only, never the page.
+    const width = stripWidth;
     const chip = strip?.querySelector<HTMLElement>(`[data-date="${selected}"]`);
-    if (chip) {
-      strip.scrollTo({
-        left: chip.offsetLeft - (strip.clientWidth - chip.offsetWidth) / 2,
-        behavior: "smooth",
-      });
-    }
+    if (!chip || width === 0) return;
+    const max = strip.scrollWidth - width;
+    const left = Math.min(max, Math.max(0, chip.offsetLeft - (width - chip.offsetWidth) / 2));
+    strip.scrollTo({ left, behavior: placed ? "smooth" : "instant" });
+    placed = true;
   });
 </script>
 
-<div class="strip" bind:this={strip}>
+<div class="strip" bind:this={strip} bind:clientWidth={stripWidth}>
   {#each days as day (day.date)}
     {@const active = day.date === selected}
     <button class="day" class:active data-date={day.date} onclick={() => onselect(day.date)}>

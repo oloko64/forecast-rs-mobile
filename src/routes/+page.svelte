@@ -54,6 +54,8 @@
     resume_minutes: 30,
     language: "system",
   });
+  /** Landscape on a phone or wider: two columns (see `split`). */
+  let wide = $state(false);
   /** The user is dragging across the chart: skip easing so everything follows. */
   let scrubbing = $state(false);
   /** Unsaved colors while dragging a slider in settings. */
@@ -80,6 +82,8 @@
   const dayStart = $derived(hourly.findIndex((h) => dateOf(h) === selectedDate));
   const dayHours = $derived(hourly.filter((h) => dateOf(h) === selectedDate));
   const selectedDay = $derived(forecast?.daily.find((d) => d.date === selectedDate));
+  /** Two-column layout: only once there is a forecast to lay out. */
+  const split = $derived(wide && !!forecast);
   const isFavorite = $derived(!!location && config.favorites.some((f) => samePlace(f, location!)));
 
   function nowIndex(): number {
@@ -205,6 +209,10 @@
   }
 
   onMount(() => {
+    const landscape = matchMedia("(orientation: landscape) and (min-width: 600px)");
+    const onOrientation = () => (wide = landscape.matches);
+    onOrientation();
+    landscape.addEventListener("change", onOrientation);
     // Refresh every `refresh_minutes` while the app is open and visible, and on
     // coming back if the forecast is older than `resume_minutes`.
     const olderThan = (minutes: number) => fetchedAt > 0 && Date.now() - fetchedAt >= minutes * 60_000;
@@ -241,13 +249,16 @@
     return () => {
       clearInterval(tick);
       document.removeEventListener("visibilitychange", onVisible);
+      landscape.removeEventListener("change", onOrientation);
     };
   });
 </script>
 
 <svelte:window ontouchstart={touchStart} ontouchmove={touchMove} ontouchend={touchEnd} />
 
-<main>
+<!-- Portrait: one column. Landscape (split): forecast summary and chart on the
+     left, days and hours on the right. -->
+<main class:split>
   <div class="top">
     <div
       class="pull"
@@ -306,7 +317,7 @@
         <div class="big-icon">
           {#key selectedHour.weather.description}
             <div class="icon-swap" in:rise={{ y: 8, duration: 400 }}>
-              <WeatherIcon weather={selectedHour.weather} size={84} animated />
+              <WeatherIcon weather={selectedHour.weather} size={split ? 64 : 84} animated />
             </div>
           {/key}
         </div>
@@ -332,20 +343,27 @@
         </div>
       </section>
 
-      <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
+      {#if !split}
+        <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
+      {/if}
 
-      <section class="card" in:rise={{ y: 16, duration: 450 }}>
+      <section class="card chart-card" in:rise={{ y: 16, duration: 450 }}>
         <HourChart
           hours={dayHours}
           selected={selected - dayStart}
           onselect={(i) => (selected = dayStart + i)}
           onscrub={(on) => (scrubbing = on)}
+          fill={split}
         />
       </section>
     {/if}
   </div>
 
+  <div class="side">
   {#if forecast && selectedHour}
+    {#if split}
+      <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
+    {/if}
     <section class="card hours" in:rise={{ y: 20, duration: 500 }}>
       <HourList
         hours={dayHours}
@@ -370,6 +388,7 @@
   {:else if !location}
     <p class="placeholder">{t("getStarted")}</p>
   {/if}
+  </div>
 </main>
 
 {#if sheetOpen}
@@ -406,6 +425,60 @@
   }
   .top {
     flex: none;
+  }
+  /* Portrait: the right column's children sit in <main>'s single column. */
+  .side {
+    display: contents;
+  }
+
+  /* ---- Landscape: two columns, each filling the height ---------------- */
+  main.split {
+    max-width: none;
+    flex-direction: row;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    overflow: hidden;
+  }
+  .split .top,
+  .split .side {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .split .top {
+    flex: 1.1 1 0;
+    overflow-y: auto;
+  }
+  .split .side {
+    flex: 1 1 0;
+    padding-top: 6px;
+  }
+  /* Takes whatever height is left in the column; the chart scales to it. */
+  .split .chart-card {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-bottom: 12px;
+    padding: 8px 0;
+  }
+  .split .hours {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-top: 4px;
+  }
+  .split .hero {
+    padding-top: 0;
+    padding-bottom: 2px;
+  }
+  .split header {
+    padding-top: 6px;
+  }
+  .split .big-icon {
+    width: 64px;
+    height: 64px;
+  }
+  .split .hero-temp {
+    font-size: 40px;
   }
   .hours {
     flex: 1 0 240px;
