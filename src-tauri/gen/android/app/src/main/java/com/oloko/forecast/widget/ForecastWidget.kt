@@ -123,7 +123,7 @@ class ForecastWidget : AppWidgetProvider() {
       views.setViewVisibility(R.id.clock_small, visible(show.clock == "small"))
       views.setViewVisibility(R.id.clock_big_block, visible(show.clock == "big"))
       val alarms = PendingIntent.getActivity(
-        context, 1, Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        context, 1, (clockIntent(context) ?: Intent(context, MainActivity::class.java)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
       )
       views.setOnClickPendingIntent(R.id.clock_small, alarms)
@@ -216,6 +216,30 @@ class ForecastWidget : AppWidgetProvider() {
       views.setImageViewBitmap(R.id.chart, ChartRenderer.render(chartW, chartH, density, hours, nowIndex, s))
       views.setViewVisibility(R.id.chart, View.VISIBLE)
       manager.updateAppWidget(id, views)
+    }
+
+    /** Phone makers' clock apps, tried in order (see <queries> in the manifest). */
+    private val CLOCK_PACKAGES = listOf(
+      "com.sec.android.app.clockpackage", // Samsung
+      "com.google.android.deskclock", // Pixel and Google Clock
+      "com.android.deskclock", // AOSP, Xiaomi, Huawei and others
+      "com.oneplus.deskclock",
+      "com.coloros.alarmclock", // Oppo / Realme
+      "com.oplus.alarmclock",
+      "com.motorola.timeweatherwidget",
+      "com.asus.deskclock",
+      "com.sonymobile.alarm",
+    )
+
+    /**
+     * The phone's clock app. Opens it by package first: some clock apps (Samsung's)
+     * don't answer the generic "show alarms" intent, which made the tap do nothing.
+     */
+    private fun clockIntent(context: Context): Intent? {
+      val pm = context.packageManager
+      CLOCK_PACKAGES.firstNotNullOfOrNull { pm.getLaunchIntentForPackage(it) }?.let { return it }
+      val showAlarms = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+      return showAlarms.takeIf { it.resolveActivity(pm) != null }
     }
 
     private fun action(context: Context, action: String, id: Int): PendingIntent {
