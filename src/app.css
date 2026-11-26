@@ -58,4 +58,23 @@ body {
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
   font-size: 15px;
   overscroll-behavior: none;
+  transition: background-color 0.3s ease-in-out;
+}
+
+/* Pressed feedback everywhere, eased in and out. */
+button {
+  transition: transform 0.18s ease-in-out;
+}
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

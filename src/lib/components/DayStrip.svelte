@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DayForecast } from "$lib/types";
-  import { dayOfMonth, mm, temp, weekday } from "$lib/format";
+  import { dayOfMonth, mm, tempUnit, weekday } from "$lib/format";
+  import WeatherIcon from "./WeatherIcon.svelte";
 
   let {
     days,
@@ -30,18 +31,14 @@
 
 <div class="strip" bind:this={strip}>
   {#each days as day (day.date)}
-    <button
-      class="day"
-      class:active={day.date === selected}
-      data-date={day.date}
-      onclick={() => onselect(day.date)}
-    >
+    {@const active = day.date === selected}
+    <button class="day" class:active data-date={day.date} onclick={() => onselect(day.date)}>
       <span class="name">{day.date === today ? "Today" : weekday(day.date)}</span>
       <span class="num">{dayOfMonth(day.date)}</span>
-      <span class="icon">{day.weather.icon}</span>
-      <span class="max">{temp(day.temperature_max)}</span>
-      <span class="min">{temp(day.temperature_min)}</span>
-      <span class="rain" class:dry={day.precipitation < 0.1}>💧{mm(day.precipitation)}</span>
+      <span class="icon"><WeatherIcon weather={day.weather} size={34} animated={active} /></span>
+      <span class="max">{tempUnit(day.temperature_max)}</span>
+      <span class="min">{tempUnit(day.temperature_min)}</span>
+      <span class="rain" class:dry={day.precipitation < 0.1}>{mm(day.precipitation)} mm</span>
     </button>
   {/each}
 </div>
@@ -52,7 +49,7 @@
     display: flex;
     gap: 8px;
     overflow-x: auto;
-    padding: 4px 16px 8px;
+    padding: 6px 16px 10px;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
   }
@@ -60,23 +57,31 @@
     display: none;
   }
   .day {
-    flex: 0 0 64px;
+    flex: 0 0 70px;
     scroll-snap-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     padding: 10px 4px;
-    border-radius: 16px;
+    border-radius: 18px;
     border: 1px solid var(--line);
     background: var(--card);
     color: var(--fg);
     font: inherit;
+    transition:
+      background-color 0.35s ease-in-out,
+      border-color 0.35s ease-in-out,
+      color 0.35s ease-in-out,
+      transform 0.35s cubic-bezier(0.65, 0, 0.35, 1),
+      box-shadow 0.35s ease-in-out;
   }
   .day.active {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent);
   }
   .name {
     font-size: 12px;
@@ -87,21 +92,22 @@
     opacity: 0.7;
   }
   .icon {
-    font-size: 22px;
     margin: 2px 0;
   }
   .max {
     font-weight: 700;
+    font-size: 14px;
   }
   .min {
-    font-size: 13px;
+    font-size: 12px;
     opacity: 0.7;
   }
   .rain {
     font-size: 11px;
-    margin-top: 2px;
+    margin-top: 3px;
+    white-space: nowrap;
   }
   .rain.dry {
-    opacity: 0.4;
+    opacity: 0.45;
   }
 </style>

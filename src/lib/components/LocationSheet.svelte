@@ -3,6 +3,7 @@
   import { details, label, samePlace } from "$lib/format";
   import { gpsLocation, searchLocations } from "$lib/api";
   import Sheet from "./Sheet.svelte";
+  import Icon from "./Icon.svelte";
 
   let {
     current,
@@ -79,7 +80,7 @@
       enterkeyhint="search"
     />
     <button class="gps" onclick={useGps} disabled={gpsBusy} aria-label="Use my location">
-      {gpsBusy ? "…" : "📍"}
+      <span class:busy={gpsBusy}><Icon name="pin" /></span>
     </button>
   </div>
 
@@ -115,7 +116,7 @@
       <span class="details">{details(l)}</span>
     </button>
     <button class="star" onclick={() => ontogglefavorite(l)} aria-label="Toggle favorite">
-      {isFav(l) ? "★" : "☆"}
+      <Icon name={isFav(l) ? "star-filled" : "star"} size={22} />
     </button>
   </div>
 {/snippet}
@@ -138,8 +139,10 @@
     color: var(--fg);
   }
   .gps {
+    display: grid;
+    place-items: center;
+    color: var(--accent);
     width: 48px;
-    font-size: 20px;
     border-radius: 12px;
     border: 1px solid var(--line);
     background: var(--card);
@@ -194,10 +197,20 @@
     font-size: 12px;
     color: var(--muted);
   }
+  .busy {
+    display: flex;
+    animation: bob 0.9s ease-in-out infinite alternate;
+  }
+  @keyframes bob {
+    to {
+      transform: translateY(-4px);
+    }
+  }
   .star {
+    display: grid;
+    place-items: center;
     width: 44px;
     height: 44px;
-    font-size: 22px;
     border: none;
     background: none;
     color: var(--star);

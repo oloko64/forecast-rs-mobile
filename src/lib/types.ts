@@ -15,6 +15,14 @@ export interface Location {
 export type ThemeMode = "system" | "light" | "dark";
 export type Palette = "ocean" | "forest" | "sunset";
 export type Provider = "open_meteo" | "met_norway";
+export type Units = "celsius" | "fahrenheit";
+
+/** Overrides for a palette's colors ("#rrggbb"); missing ones keep the preset. */
+export interface PaletteColors {
+  accent?: string;
+  temp?: string;
+  rain?: string;
+}
 
 export const PROVIDER_NAMES: Record<Provider, string> = {
   open_meteo: "Open-Meteo",
@@ -29,9 +37,14 @@ export interface Config {
   palette: Palette;
   /** Preferred forecast provider; the other one is the fallback. */
   provider: Provider;
+  units: Units;
+  custom_colors: Partial<Record<Palette, PaletteColors>>;
 }
 
-export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider">>;
+export type SettingsPatch = Partial<Pick<Config, "days" | "theme_mode" | "palette" | "provider" | "units">> & {
+  /** Replaces a palette's custom colors; empty resets it to the preset. */
+  custom_colors?: [Palette, PaletteColors];
+};
 
 export type WeatherKind = "clear" | "cloudy" | "fog" | "rain" | "snow" | "storm" | "unknown";
 

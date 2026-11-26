@@ -1,9 +1,36 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import * as api from "$lib/api";
-  import { PROVIDER_NAMES, type Config, type Forecast, type Location, type SettingsPatch } from "$lib/types";
+  import {
+    PROVIDER_NAMES,
+    type Config,
+    type Forecast,
+    type Location,
+    type PaletteColors,
+    type SettingsPatch,
+  } from "$lib/types";
   import { applyTheme } from "$lib/theme";
-  import { dateOf, hourKey, hourOf, label, longDate, mm, nowHourKey, samePlace, temp } from "$lib/format";
+  import { prefs } from "$lib/prefs.svelte";
+  import { Tween } from "svelte/motion";
+  import { slide } from "svelte/transition";
+  import { cubicInOut } from "svelte/easing";
+  import { rise } from "$lib/motion";
+  import {
+    dateOf,
+    hourKey,
+    hourOf,
+    label,
+    longDate,
+    mm,
+    nowHourKey,
+    samePlace,
+    tempUnit,
+    toUnit,
+    unitLetter,
+  } from "$lib/format";
+  import Icon from "$lib/components/Icon.svelte";
+  import RefreshIcon from "$lib/components/RefreshIcon.svelte";
+  import WeatherIcon from "$lib/components/WeatherIcon.svelte";
   import DayStrip from "$lib/components/DayStrip.svelte";
   import HourChart from "$lib/components/HourChart.svelte";
   import HourList from "$lib/components/HourList.svelte";
@@ -21,7 +48,11 @@
     theme_mode: "system",
     palette: "ocean",
     provider: "open_meteo",
+    units: "celsius",
+    custom_colors: {},
   });
+  /** Unsaved colors while dragging a slider in settings. */
+  let previewColors = $state<PaletteColors | null>(null);
   let dayChoices = $state<number[]>([3, 7, 10, 16]);
   let location = $state<Location | null>(null);
   let forecast = $state<Forecast | null>(null);
@@ -77,7 +108,9 @@
     }
   }
 
-  const refresh = () => location && !loading && load(location, { keepSelection: true });
+  const refresh = async () => {
+    if (location && !loading) await load(location, { keepSelection: true });
+  };
 
   async function toggleFavorite(target: Location) {
     try {
@@ -87,7 +120,18 @@
     }
   }
 
-  $effect(() => applyTheme(config.theme_mode, config.palette));
+  $effect(() =>
+    applyTheme(config.theme_mode, config.palette, previewColors ?? config.custom_colors[config.palette]),
+  );
+  $effect(() => {
+    prefs.units = config.units;
+  });
+
+  // The big temperature counts to its new value.
+  const heroTemp = new Tween(0, { duration: 500, easing: cubicInOut });
+  $effect(() => {
+    if (selectedHour) heroTemp.target = toUnit(selectedHour.temperature);
+  });
 
   async function changeSettings(patch: SettingsPatch) {
     const before = config;
@@ -110,22 +154,37 @@
     selected = start + Math.min(Math.max(offset, 0), count - 1);
   }
 
-  // Pull to refresh.
+  // Pull to refresh: follows the finger, then holds a spinner until loaded.
+  const PULL_HOLD = 52;
   let pullStart: number | null = null;
   let pull = $state(0);
+  let dragging = $state(false);
+  let pullRefreshing = $state(false);
+  const pullHeight = $derived(pullRefreshing ? PULL_HOLD : pull);
+
   function touchStart(e: TouchEvent) {
     // The hour list scrolls on its own: pulling there must not refresh.
     const inList = (e.target as Element | null)?.closest?.(".hours");
-    pullStart = !inList && !sheetOpen && !settingsOpen ? e.touches[0].clientY : null;
+    const free = !inList && !sheetOpen && !settingsOpen && !pullRefreshing;
+    pullStart = free ? e.touches[0].clientY : null;
   }
   function touchMove(e: TouchEvent) {
     if (pullStart === null) return;
-    pull = Math.max(0, Math.min(110, (e.touches[0].clientY - pullStart) * 0.5));
+    dragging = true;
+    // Resistance grows as you pull further.
+    const dy = Math.max(0, e.touches[0].clientY - pullStart);
+    pull = 110 * (1 - Math.exp(-dy / 220));
   }
-  function touchEnd() {
-    if (pull >= PULL_TRIGGER) refresh();
+  async function touchEnd() {
+    const triggered = pull >= PULL_TRIGGER && !!location;
+    dragging = false;
     pull = 0;
     pullStart = null;
+    if (triggered) {
+      pullRefreshing = true;
+      await refresh();
+      pullRefreshing = false;
+    }
   }
 
   onMount(() => {
@@ -166,31 +225,49 @@
 
 <main>
   <div class="top">
-    <div class="pull" style:height="{pull}px" style:opacity={pull / PULL_TRIGGER}>
-      <span class:ready={pull >= PULL_TRIGGER}>↻</span>
+    <div
+      class="pull"
+      class:dragging
+      style:height="{pullHeight}px"
+      style:opacity={pullRefreshing ? 1 : Math.min(1, pull / PULL_TRIGGER)}
+    >
+      <span
+        class="pull-icon"
+        class:ready={pull >= PULL_TRIGGER || pullRefreshing}
+        style:transform={pullRefreshing ? "" : `rotate(${pull * 3}deg)`}
+      >
+        <RefreshIcon spinning={pullRefreshing} size={22} />
+      </span>
     </div>
 
     <header>
       <button class="place" onclick={() => (sheetOpen = true)}>
-        <span class="name">{location ? location.name : "Choose a location"} <span class="caret">▾</span></span>
+        <span class="name">
+          <span class="name-text">{location ? location.name : "Choose a location"}</span>
+          <Icon name="chevron-down" size={18} />
+        </span>
         {#if location}<span class="sub">{label(location).split(", ").slice(1).join(", ") || forecast?.timezone}</span>{/if}
       </button>
       {#if location}
-        <button class="icon-btn star" onclick={() => toggleFavorite(location!)} aria-label="Toggle favorite">
-          {isFavorite ? "★" : "☆"}
+        <button class="icon-btn star" class:on={isFavorite} onclick={() => toggleFavorite(location!)} aria-label="Toggle favorite">
+          <Icon name={isFavorite ? "star-filled" : "star"} />
         </button>
       {/if}
-      <button class="icon-btn" class:spin={loading} onclick={refresh} disabled={!location} aria-label="Refresh">↻</button>
-      <button class="icon-btn" onclick={() => (settingsOpen = true)} aria-label="Settings">⚙</button>
+      <button class="icon-btn" onclick={refresh} disabled={!location} aria-label="Refresh">
+        <RefreshIcon spinning={loading && !pullRefreshing} />
+      </button>
+      <button class="icon-btn gear" onclick={() => (settingsOpen = true)} aria-label="Settings">
+        <Icon name="gear" />
+      </button>
     </header>
 
     {#if error}
-      <div class="banner error">
+      <div class="banner error" transition:slide={{ duration: 300, easing: cubicInOut }}>
         <span>{error}</span>
         {#if location}<button onclick={refresh}>Retry</button>{/if}
       </div>
     {:else if forecast?.fallback}
-      <div class="banner notice">
+      <div class="banner notice" transition:slide={{ duration: 300, easing: cubicInOut }}>
         <span>
           {PROVIDER_NAMES[config.provider]} is unavailable, showing {PROVIDER_NAMES[forecast.source]}.
         </span>
@@ -198,20 +275,31 @@
     {/if}
 
     {#if forecast && selectedHour}
-      <section class="hero">
-        <div class="big-icon">{selectedHour.weather.icon}</div>
+      <section class="hero" in:rise={{ y: 12, duration: 450 }}>
+        <div class="big-icon">
+          {#key selectedHour.weather.description}
+            <div class="icon-swap" in:rise={{ y: 8, duration: 400 }}>
+              <WeatherIcon weather={selectedHour.weather} size={84} animated />
+            </div>
+          {/key}
+        </div>
         <div class="hero-main">
-          <div class="hero-temp">{temp(selectedHour.temperature)}</div>
-          <div class="hero-desc">{selectedHour.weather.description}</div>
+          <div class="hero-temp">{Math.round(heroTemp.current)}°<small>{unitLetter()}</small></div>
+          {#key selectedHour.weather.description}
+            <div class="hero-desc" in:rise={{ y: 6, duration: 350 }}>{selectedHour.weather.description}</div>
+          {/key}
           <div class="hero-meta">
             {selectedDate === today ? "Today" : longDate(selectedDate)} · {hourOf(selectedHour)}
             {#if hourKey(selectedHour) !== nowKey}
-              <button class="now-btn" onclick={() => (selected = nowIndex())}>Now</button>
+              <button class="now-btn" onclick={() => (selected = nowIndex())} transition:rise={{ y: 4, duration: 250 }}>Now</button>
             {/if}
           </div>
           {#if selectedDay}
             <div class="hero-meta">
-              ↑ {temp(selectedDay.temperature_max)} ↓ {temp(selectedDay.temperature_min)} · 💧 {mm(selectedDay.precipitation)} mm
+              <Icon name="arrow-up" size={14} />{tempUnit(selectedDay.temperature_max)}
+              <Icon name="arrow-down" size={14} />{tempUnit(selectedDay.temperature_min)}
+              <span class="dot">·</span>
+              <span class="rain-meta"><Icon name="drop" size={14} />{mm(selectedDay.precipitation)} mm</span>
             </div>
           {/if}
         </div>
@@ -219,14 +307,14 @@
 
       <DayStrip days={forecast.daily} selected={selectedDate} {today} onselect={selectDay} />
 
-      <section class="card">
+      <section class="card" in:rise={{ y: 16, duration: 450 }}>
         <HourChart hours={dayHours} selected={selected - dayStart} onselect={(i) => (selected = dayStart + i)} />
       </section>
     {/if}
   </div>
 
   {#if forecast && selectedHour}
-    <section class="card hours">
+    <section class="card hours" in:rise={{ y: 20, duration: 500 }}>
       <HourList hours={dayHours} selected={selected - dayStart} {nowKey} onselect={(i) => (selected = dayStart + i)}>
         {#snippet footer()}
           <p class="credit">
@@ -257,7 +345,13 @@
 {/if}
 
 {#if settingsOpen}
-  <SettingsSheet {config} {dayChoices} onchange={changeSettings} onclose={() => (settingsOpen = false)} />
+  <SettingsSheet
+    {config}
+    {dayChoices}
+    onchange={changeSettings}
+    onpreview={(c) => (previewColors = c)}
+    onclose={() => (settingsOpen = false)}
+  />
 {/if}
 
 <style>
@@ -293,10 +387,29 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    font-size: 22px;
     color: var(--muted);
+    /* Eases back when released; follows the finger 1:1 while dragging. */
+    transition:
+      height 0.4s cubic-bezier(0.65, 0, 0.35, 1),
+      opacity 0.3s ease-in-out;
   }
-  .pull .ready {
+  .pull.dragging {
+    transition: none;
+  }
+  .pull-icon {
+    display: flex;
+    padding: 7px;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+    transition:
+      color 0.25s ease-in-out,
+      transform 0.25s ease-out;
+  }
+  .pull.dragging .pull-icon {
+    transition: color 0.25s ease-in-out;
+  }
+  .pull-icon.ready {
     color: var(--accent);
   }
   header {
@@ -319,16 +432,20 @@
     text-align: left;
   }
   .name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 22px;
     font-weight: 700;
+    max-width: 100%;
+  }
+  .name :global(svg) {
+    color: var(--muted);
+  }
+  .name-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  .caret {
-    font-size: 14px;
-    color: var(--muted);
   }
   .sub {
     font-size: 13px;
@@ -337,24 +454,38 @@
   .icon-btn {
     width: 44px;
     height: 44px;
+    display: grid;
+    place-items: center;
     border: none;
     background: none;
     color: var(--fg);
-    font-size: 22px;
     border-radius: 50%;
+    transition:
+      background-color 0.25s ease-in-out,
+      transform 0.2s ease-in-out,
+      color 0.25s ease-in-out;
+  }
+  .icon-btn:active {
+    background: var(--highlight);
   }
   .icon-btn.star {
     color: var(--star);
   }
+  .icon-btn.star.on :global(svg) {
+    animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .icon-btn.gear :global(svg) {
+    transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .icon-btn.gear:active :global(svg) {
+    transform: rotate(90deg);
+  }
   .icon-btn:disabled {
     opacity: 0.3;
   }
-  .spin {
-    animation: spin 0.9s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+  @keyframes pop {
+    50% {
+      transform: scale(1.3);
     }
   }
   .banner {
@@ -392,13 +523,27 @@
     padding: 4px 16px 10px;
   }
   .big-icon {
-    font-size: 64px;
-    line-height: 1;
+    display: grid;
+    width: 84px;
+    height: 84px;
+  }
+  .icon-swap {
+    grid-area: 1 / 1;
   }
   .hero-temp {
     font-size: 46px;
     font-weight: 300;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-temp small {
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--muted);
+    margin-left: 2px;
+    vertical-align: top;
+    position: relative;
+    top: 4px;
   }
   .hero-desc {
     font-size: 17px;
@@ -410,8 +555,18 @@
     color: var(--muted);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     margin-top: 2px;
+    min-height: 22px;
+  }
+  .hero-meta .dot {
+    margin: 0 4px;
+  }
+  .rain-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--rain);
   }
   .now-btn {
     border: none;
@@ -422,8 +577,10 @@
     font-weight: 700;
     border-radius: 8px;
     padding: 2px 10px;
+    margin-left: 4px;
   }
   .card {
+    transition: background-color 0.3s ease-in-out;
     background: var(--card);
     border-radius: 18px;
     margin: 8px 16px;

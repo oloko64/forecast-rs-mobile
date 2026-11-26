@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -27,6 +30,53 @@ pub(crate) struct Config {
     /// Preferred forecast provider; the other one is the fallback.
     #[serde(default)]
     pub provider: Provider,
+    #[serde(default)]
+    pub units: Units,
+    /// User changes to the preset colors, per palette.
+    #[serde(default)]
+    pub custom_colors: BTreeMap<Palette, PaletteColors>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Units {
+    #[default]
+    Celsius,
+    Fahrenheit,
+}
+
+/// Overrides for a palette's colors, as "#rrggbb". Missing ones keep the preset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct PaletteColors {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rain: Option<String>,
+}
+
+impl PaletteColors {
+    fn is_empty(&self) -> bool {
+        self.accent.is_none() && self.temp.is_none() && self.rain.is_none()
+    }
+
+    /// Keeps only valid "#rrggbb" colors, lowercased. They end up in CSS.
+    fn sanitized(self) -> Self {
+        let clean = |c: Option<String>| {
+            c.filter(|c| {
+                c.len() == 7
+                    && c.starts_with('#')
+                    && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
+            })
+            .map(|c| c.to_ascii_lowercase())
+        };
+        Self {
+            accent: clean(self.accent),
+            temp: clean(self.temp),
+            rain: clean(self.rain),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +88,7 @@ pub(crate) enum ThemeMode {
     Dark,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Palette {
     #[default]
@@ -54,6 +104,9 @@ pub(crate) struct SettingsPatch {
     pub theme_mode: Option<ThemeMode>,
     pub palette: Option<Palette>,
     pub provider: Option<Provider>,
+    pub units: Option<Units>,
+    /// Replaces a palette's custom colors; all fields empty resets it to the preset.
+    pub custom_colors: Option<(Palette, PaletteColors)>,
 }
 
 impl Default for Config {
@@ -65,6 +118,8 @@ impl Default for Config {
             theme_mode: ThemeMode::default(),
             palette: Palette::default(),
             provider: Provider::default(),
+            units: Units::default(),
+            custom_colors: BTreeMap::new(),
         }
     }
 }
@@ -112,6 +167,17 @@ impl Config {
         }
         if let Some(provider) = patch.provider {
             self.provider = provider;
+        }
+        if let Some(units) = patch.units {
+            self.units = units;
+        }
+        if let Some((palette, colors)) = patch.custom_colors {
+            let colors = colors.sanitized();
+            if colors.is_empty() {
+                self.custom_colors.remove(&palette);
+            } else {
+                self.custom_colors.insert(palette, colors);
+            }
         }
     }
 
@@ -173,6 +239,14 @@ mod tests {
             theme_mode: ThemeMode::Dark,
             palette: Palette::Sunset,
             provider: Provider::MetNorway,
+            units: Units::Fahrenheit,
+            custom_colors: BTreeMap::from([(
+                Palette::Forest,
+                PaletteColors {
+                    accent: Some("#112233".into()),
+                    ..PaletteColors::default()
+                },
+            )]),
         };
         config.save_to(&dir.file()).unwrap();
         assert_eq!(Config::load_from(&dir.file()).unwrap(), config);
@@ -206,6 +280,28 @@ mod tests {
         assert_eq!(config.theme_mode, ThemeMode::System);
         assert_eq!(config.palette, Palette::Ocean);
         assert_eq!(config.provider, Provider::OpenMeteo);
+        assert_eq!(config.units, Units::Celsius);
+        assert!(config.custom_colors.is_empty());
+    }
+
+    #[test]
+    fn custom_colors_are_validated_and_resettable() {
+        let mut config = Config::default();
+        let patch: SettingsPatch = serde_json::from_str(
+            r##"{"custom_colors":["sunset",{"accent":"#AABBCC","temp":"red;}","rain":"#12345"}]}"##,
+        )
+        .unwrap();
+        config.apply(patch);
+        let colors = &config.custom_colors[&Palette::Sunset];
+        assert_eq!(colors.accent.as_deref(), Some("#aabbcc"));
+        assert_eq!(colors.temp, None, "not a hex color");
+        assert_eq!(colors.rain, None, "too short");
+
+        config.apply(SettingsPatch {
+            custom_colors: Some((Palette::Sunset, PaletteColors::default())),
+            ..SettingsPatch::default()
+        });
+        assert!(config.custom_colors.is_empty());
     }
 
     #[test]

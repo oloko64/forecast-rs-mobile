@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { HourForecast } from "$lib/types";
   import { hourOf, mm, temp } from "$lib/format";
+  import { Tween } from "svelte/motion";
+  import { cubicInOut } from "svelte/easing";
 
   let {
     hours,
@@ -25,16 +27,46 @@
   const step = $derived(n > 1 ? (width - 2 * PAD_X) / (n - 1) : 0);
   const x = (i: number) => PAD_X + i * step;
 
-  const temps = $derived(hours.map((h) => h.temperature));
-  const tMin = $derived(Math.min(...temps));
-  const tMax = $derived(Math.max(...temps));
+  // Values tween between days/hours so the chart morphs instead of jumping.
+  const MOTION = { duration: 450, easing: cubicInOut };
+  const target = $derived(hours.map((h) => h.temperature));
+  const rainTarget = $derived(hours.map((h) => h.precipitation));
+  const tempsT = new Tween<number[]>([], MOTION);
+  const rainT = new Tween<number[]>([], MOTION);
+  const selT = new Tween(0, MOTION);
+  $effect(() => {
+    // Tweening needs equal lengths (MET Norway days can be partial): jump otherwise.
+    const same = tempsT.current.length === target.length;
+    tempsT.set(target, same ? MOTION : { duration: 0 });
+    rainT.set(rainTarget, same ? MOTION : { duration: 0 });
+  });
+  $effect(() => {
+    selT.set(selected);
+  });
+  const temps = $derived(tempsT.current.length === n ? tempsT.current : target);
+  const rains = $derived(rainT.current.length === n ? rainT.current : rainTarget);
+  const tMin = $derived(Math.min(...target));
+  const tMax = $derived(Math.max(...target));
   const y = (t: number) => {
     const span = Math.max(tMax - tMin, 2);
     const mid = (tMax + tMin) / 2;
     return TEMP_BOTTOM - ((t - (mid - span / 2)) / span) * (TEMP_BOTTOM - TEMP_TOP);
   };
 
-  const line = $derived(hours.map((h, i) => `${i ? "L" : "M"}${x(i)},${y(h.temperature)}`).join(""));
+  // Smooth curve through the points (Catmull-Rom → cubic Bézier).
+  const line = $derived.by(() => {
+    const p = temps.map((t, i) => [x(i), y(t)] as const);
+    if (p.length < 2) return "";
+    let d = `M${p[0][0]},${p[0][1]}`;
+    for (let i = 0; i < p.length - 1; i++) {
+      const [x0, y0] = p[Math.max(0, i - 1)];
+      const [x1, y1] = p[i];
+      const [x2, y2] = p[i + 1];
+      const [x3, y3] = p[Math.min(p.length - 1, i + 2)];
+      d += `C${x1 + (x2 - x0) / 6},${y1 + (y2 - y0) / 6} ${x2 - (x3 - x1) / 6},${y2 - (y3 - y1) / 6} ${x2},${y2}`;
+    }
+    return d;
+  });
   const area = $derived(n ? `${line}L${x(n - 1)},${TEMP_BOTTOM + 8}L${x(0)},${TEMP_BOTTOM + 8}Z` : "");
 
   const rainPeak = $derived(Math.max(0, ...hours.map((h) => h.precipitation)));
@@ -43,6 +75,14 @@
   const rainH = (p: number) => (p <= 0 ? 0 : Math.max(2, (p / rainMax) * (RAIN_BOTTOM - RAIN_TOP)));
 
   const sel = $derived(hours[selected]);
+  /** Interpolated position of the selection marker. */
+  const selX = $derived(x(selT.current));
+  const selY = $derived.by(() => {
+    const i = Math.min(Math.max(selT.current, 0), Math.max(0, temps.length - 1));
+    const lo = Math.floor(i);
+    const hi = Math.min(lo + 1, temps.length - 1);
+    return y((temps[lo] ?? 0) + ((temps[hi] ?? 0) - (temps[lo] ?? 0)) * (i - lo));
+  });
   const tickEvery = $derived(width < 360 ? 6 : 3);
 
   function pick(e: PointerEvent) {
@@ -82,16 +122,17 @@
       <path d={area} fill="url(#tempFill)" />
       <path d={line} fill="none" stroke="var(--temp)" stroke-width="2.5" stroke-linejoin="round" />
 
-      {#each hours as h, i}
-        {#if h.precipitation > 0}
+      {#each rains as p, i}
+        {#if p > 0.001}
           <rect
+            class="bar"
             x={x(i) - barW / 2}
-            y={RAIN_BOTTOM - rainH(h.precipitation)}
+            y={RAIN_BOTTOM - rainH(p)}
             width={barW}
-            height={rainH(h.precipitation)}
+            height={rainH(p)}
             rx="1.5"
             fill="var(--rain)"
-            opacity={i === selected ? 1 : 0.6}
+            opacity={i === selected ? 1 : 0.55}
           />
         {/if}
       {/each}
@@ -104,12 +145,11 @@
       {/each}
 
       {#if sel}
-        <line x1={x(selected)} x2={x(selected)} y1={TEMP_TOP - 12} y2={RAIN_BOTTOM} stroke="var(--fg)" stroke-opacity="0.25" stroke-dasharray="3 3" />
-        <circle cx={x(selected)} cy={y(sel.temperature)} r="5" fill="var(--bg)" stroke="var(--temp)" stroke-width="2.5" />
-        <text
-          x={Math.min(width - 24, Math.max(24, x(selected)))}
-          y={Math.max(14, y(sel.temperature) - 12)}
-          class="value">{temp(sel.temperature)}</text
+        <line x1={selX} x2={selX} y1={TEMP_TOP - 12} y2={RAIN_BOTTOM} stroke="var(--fg)" stroke-opacity="0.25" stroke-dasharray="3 3" />
+        <circle cx={selX} cy={selY} r="9" fill="var(--temp)" opacity="0.18" />
+        <circle cx={selX} cy={selY} r="5" fill="var(--bg)" stroke="var(--temp)" stroke-width="2.5" />
+        <text x={Math.min(width - 24, Math.max(24, selX))} y={Math.max(14, selY - 14)} class="value"
+          >{temp(sel.temperature)}</text
         >
       {/if}
     </svg>
@@ -129,6 +169,13 @@
     display: block;
     outline: none;
     user-select: none;
+  }
+  path,
+  .bar {
+    transition:
+      fill 0.3s ease-in-out,
+      stroke 0.3s ease-in-out,
+      opacity 0.3s ease-in-out;
   }
   .tick {
     font-size: 11px;

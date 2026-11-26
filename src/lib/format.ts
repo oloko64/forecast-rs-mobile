@@ -1,4 +1,5 @@
 import type { HourForecast, Location } from "./types";
+import { prefs } from "./prefs.svelte";
 
 /** "Araraquara, Sao Paulo, Brazil" */
 export function label(l: Location): string {
@@ -49,5 +50,13 @@ export function longDate(date: string): string {
   return `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
-export const temp = (t: number) => `${Math.round(t)}°`;
+/** Converts from °C, the unit both providers use, to the chosen one. */
+export const toUnit = (celsius: number) =>
+  prefs.units === "fahrenheit" ? (celsius * 9) / 5 + 32 : celsius;
+export const unitLetter = () => (prefs.units === "fahrenheit" ? "F" : "C");
+
+/** "26°" */
+export const temp = (t: number) => `${Math.round(toUnit(t))}°`;
+/** "26°C" */
+export const tempUnit = (t: number) => `${Math.round(toUnit(t))}°${unitLetter()}`;
 export const mm = (p: number) => (p >= 10 ? p.toFixed(0) : p.toFixed(1));

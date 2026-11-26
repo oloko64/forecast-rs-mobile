@@ -2,6 +2,8 @@
   import type { HourForecast } from "$lib/types";
   import { hourKey, hourOf, mm, temp } from "$lib/format";
   import type { Snippet } from "svelte";
+  import WeatherIcon from "./WeatherIcon.svelte";
+  import { rise } from "$lib/motion";
 
   let {
     hours,
@@ -31,13 +33,20 @@
 </script>
 
 <div class="list" bind:this={list}>
+  {#key hours[0]?.time}
   {#each hours as h, i (h.time)}
-    <button class="row" class:active={i === selected} data-i={i} onclick={() => onselect(i)}>
+    <button
+      class="row"
+      class:active={i === selected}
+      data-i={i}
+      onclick={() => onselect(i)}
+      in:rise={{ y: 14, duration: 380, delay: Math.max(0, i - selected) < 8 ? Math.max(0, i - selected) * 25 : 0 }}
+    >
       <span class="time">
         {hourOf(h)}
         {#if hourKey(h) === nowKey}<em class="now">now</em>{/if}
       </span>
-      <span class="icon">{h.weather.icon}</span>
+      <span class="icon"><WeatherIcon weather={h.weather} size={i === selected ? 40 : 28} animated={i === selected} /></span>
       <span class="desc">{h.weather.description}</span>
       <span class="rain" class:dry={h.precipitation === 0 && !h.precipitation_probability}>
         {h.precipitation_probability != null ? `${Math.round(h.precipitation_probability)}% · ` : ""}{mm(h.precipitation)}mm
@@ -45,6 +54,7 @@
       <span class="temp">{temp(h.temperature)}</span>
     </button>
   {/each}
+  {/key}
   {@render footer?.()}
   <!-- Room to scroll the last hours to the top too. -->
   <div class="tail"></div>
@@ -74,8 +84,12 @@
     font: inherit;
     text-align: left;
     transition:
-      background-color 0.2s,
-      padding 0.2s;
+      background-color 0.35s ease-in-out,
+      border-color 0.35s ease-in-out,
+      padding 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .row:active {
+    transform: none;
   }
   .row.active {
     background: var(--highlight);
@@ -88,8 +102,9 @@
     font-weight: 700;
     font-size: 16px;
   }
-  .row.active .icon {
-    font-size: 30px;
+  .icon {
+    display: flex;
+    justify-content: center;
   }
   /* Selected hour: two lines, rain under the description, everything bigger. */
   .row.active {
@@ -114,6 +129,14 @@
   .row.active .temp {
     font-size: 24px;
   }
+  .time,
+  .desc,
+  .temp,
+  .rain {
+    transition:
+      font-size 0.3s ease-in-out,
+      color 0.3s ease-in-out;
+  }
   .time {
     display: flex;
     flex-direction: column;
@@ -122,9 +145,7 @@
     font-variant-numeric: tabular-nums;
     color: var(--muted);
   }
-  .icon {
-    font-size: 20px;
-  }
+
   .desc {
     font-size: 14px;
     white-space: nowrap;
