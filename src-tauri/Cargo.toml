@@ -1,6 +1,6 @@
 [package]
 name = "forecast-mobile"
-version = "0.8.3"
+version = "0.8.4"
 description = "Hourly weather forecast powered by Open-Meteo"
 authors = ["OLoKo64"]
 license = "MIT"
