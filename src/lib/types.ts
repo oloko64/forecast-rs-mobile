@@ -57,6 +57,8 @@ export interface WidgetOptions {
   now: boolean;
   summary: boolean;
   day_picker: boolean;
+  /** A day picked with the arrows goes back to today after a few minutes. */
+  return_to_today: boolean;
   refresh_button: boolean;
   rain: boolean;
   clock: "off" | "small" | "big";

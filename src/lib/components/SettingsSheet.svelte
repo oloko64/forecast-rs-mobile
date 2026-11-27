@@ -291,6 +291,21 @@
               </button>
             {/each}
           </div>
+
+          {#if config.widget.day_picker}
+            <div class="toggles">
+              <button
+                class="toggle-row"
+                role="switch"
+                aria-checked={config.widget.return_to_today}
+                onclick={() => setWidget({ return_to_today: !config.widget.return_to_today })}
+              >
+                <span>{t("widgetReturnToToday")}</span>
+                <span class="switch" class:on={config.widget.return_to_today}><i></i></span>
+              </button>
+            </div>
+            <p class="hint">{t("widgetReturnToTodayHint")}</p>
+          {/if}
           <p class="hint">{t("widgetHowTo")}</p>
         {/if}
       </div>
@@ -403,6 +418,9 @@
     border: 1px solid var(--line);
     background: var(--card);
     overflow: hidden;
+  }
+  .toggles + .toggles {
+    margin-top: 12px;
   }
   .toggle-row {
     display: flex;

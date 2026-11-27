@@ -73,6 +73,8 @@ pub(crate) struct WidgetOptions {
     pub now: bool,
     pub summary: bool,
     pub day_picker: bool,
+    /// A day picked with the arrows goes back to today after a few minutes.
+    pub return_to_today: bool,
     pub refresh_button: bool,
     pub rain: bool,
     pub clock: ClockStyle,
@@ -87,6 +89,7 @@ impl Default for WidgetOptions {
             now: true,
             summary: false,
             day_picker: true,
+            return_to_today: true,
             refresh_button: true,
             rain: true,
             clock: ClockStyle::Big,
@@ -391,6 +394,7 @@ mod tests {
             widget_refresh_minutes: 60,
             widget: WidgetOptions {
                 rain: false,
+                return_to_today: false,
                 clock: ClockStyle::Big,
                 background: 25,
                 ..WidgetOptions::default()
@@ -485,6 +489,7 @@ mod tests {
         assert!(!config.widget.location && !config.widget.summary);
         assert!(!config.widget.rain, "other choices are kept");
         assert_eq!(config.widget.clock, ClockStyle::Big);
+        assert!(config.widget.return_to_today, "new options take their default");
 
         // Turned back on after the migration: stays on.
         config.widget.location = true;

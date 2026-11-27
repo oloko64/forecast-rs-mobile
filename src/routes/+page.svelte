@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import * as api from "$lib/api";
   import {
     PROVIDER_NAMES,
@@ -59,6 +59,7 @@
       now: true,
       summary: false,
       day_picker: true,
+      return_to_today: true,
       refresh_button: true,
       rain: true,
       clock: "big",
@@ -103,10 +104,25 @@
     return i < 0 ? 0 : i;
   }
 
+  // When the hour turns, a selection on the hour that just ended moves to the new
+  // one; an hour picked by hand stays. Doesn't wait for the next fetch.
+  let lastNowKey = "";
+  $effect(() => {
+    const key = nowKey;
+    const previous = lastNowKey;
+    lastNowKey = key;
+    if (!previous || key === previous) return;
+    untrack(() => {
+      if (selectedHour && hourKey(selectedHour) === previous) selected = nowIndex();
+    });
+  });
+
   async function load(target: Location, { keepSelection = false } = {}) {
     loading = true;
     error = null;
-    const keep = keepSelection && selectedHour ? selectedHour.time : null;
+    // An hour picked by hand survives a refresh; "now" follows the clock.
+    const picked = selectedHour && hourKey(selectedHour) !== nowKey;
+    const keep = keepSelection && picked ? selectedHour.time : null;
     try {
       const result = await api.getForecast(target, config.days);
       forecast = result;
@@ -234,6 +250,8 @@
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       clock = Date.now();
+      // Coming back to the app starts again from now.
+      if (forecast) selected = nowIndex();
       if (olderThan(config.resume_minutes)) refresh();
     };
     document.addEventListener("visibilitychange", onVisible);

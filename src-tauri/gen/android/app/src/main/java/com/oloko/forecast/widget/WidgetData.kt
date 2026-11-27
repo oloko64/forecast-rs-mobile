@@ -39,6 +39,8 @@ data class WidgetShow(
   val now: Boolean = true,
   val summary: Boolean = false,
   val dayPicker: Boolean = true,
+  /** A day picked with the arrows goes back to today after 5 minutes. */
+  val returnToToday: Boolean = true,
   val refreshButton: Boolean = true,
   val rain: Boolean = true,
   /** "off", "small" or "big". */
@@ -129,6 +131,7 @@ data class Settings(
         now = shown("now", defaults.now),
         summary = shown("summary", defaults.summary),
         dayPicker = shown("day_picker", defaults.dayPicker),
+        returnToToday = shown("return_to_today", defaults.returnToToday),
         refreshButton = shown("refresh_button", defaults.refreshButton),
         rain = shown("rain", defaults.rain),
         clock = w?.optString("clock", defaults.clock)?.takeIf { it in setOf("off", "small", "big") } ?: defaults.clock,
