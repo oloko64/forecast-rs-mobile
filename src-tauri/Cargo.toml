@@ -3,6 +3,7 @@ name = "forecast-mobile"
 version = "0.8.2"
 description = "Hourly weather forecast powered by Open-Meteo"
 authors = ["OLoKo64"]
+license = "MIT"
 edition = "2024"
 
 [lib]

@@ -128,3 +128,7 @@ The release APK is unsigned. Sign it with `zipalign` and `apksigner` from the An
 - Place search: [Open-Meteo Geocoding](https://open-meteo.com/en/docs/geocoding-api). Map spot names: [OpenStreetMap Nominatim](https://nominatim.org/)
 - Maps: [OpenFreeMap](https://openfreemap.org/) and [OpenMapTiles](https://openmaptiles.org/), data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), rendered with [MapLibre GL JS](https://maplibre.org/)
 - Mobile sibling of [cli-forecast-rs](https://github.com/oloko64/cli-forecast-rs), the terminal version, where the Rust core started
+
+## License
+
+[MIT](LICENSE)
