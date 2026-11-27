@@ -1,5 +1,6 @@
 package com.oloko.forecast.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -17,6 +18,8 @@ import com.oloko.forecast.R
  * Home-screen widget: today's (or a chosen day's) temperature and rain chart,
  * the current conditions, and ◀ day ▶ to browse the forecast. Data comes from
  * widget.json, written by the app after each fetch and by [RefreshWorker].
+ * Between fetches, an alarm redraws it when the hour turns (and when a picked
+ * day should go back to today), so the chart's "now" follows the clock.
  */
 class ForecastWidget : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -30,7 +33,10 @@ class ForecastWidget : AppWidgetProvider() {
 
   override fun onEnabled(context: Context) = RefreshWorker.schedule(context, Settings.load(context).refreshMinutes)
 
-  override fun onDisabled(context: Context) = RefreshWorker.cancel(context)
+  override fun onDisabled(context: Context) {
+    RefreshWorker.cancel(context)
+    alarms(context).cancel(tick(context))
+  }
 
   override fun onDeleted(context: Context, ids: IntArray) {
     prefs(context).edit().apply { ids.forEach { remove(dayKey(it)); remove(dayKey(it) + "_at") } }.apply()
@@ -52,6 +58,8 @@ class ForecastWidget : AppWidgetProvider() {
           .apply()
         render(context, AppWidgetManager.getInstance(context), id)
       }
+      // Only redraws from the saved forecast: no network.
+      ACTION_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> updateAll(context)
       ACTION_REFRESH -> {
         prefs(context).edit().putBoolean(KEY_REFRESHING, true).apply()
         updateAll(context)
@@ -64,11 +72,13 @@ class ForecastWidget : AppWidgetProvider() {
     private const val ACTION_PREV = "com.oloko.forecast.widget.PREV"
     private const val ACTION_NEXT = "com.oloko.forecast.widget.NEXT"
     private const val ACTION_REFRESH = "com.oloko.forecast.widget.REFRESH"
+    private const val ACTION_TICK = "com.oloko.forecast.widget.TICK"
     private const val PREFS = "forecast_widget"
     const val KEY_REFRESHING = "refreshing"
     private const val KEY_SCHEDULED_MINUTES = "scheduled_minutes"
-    /** A day picked with the arrows returns to today after this long. */
-    private const val SELECTION_TTL_MS = 30 * 60 * 1000L
+    /** A day picked with the arrows returns to today after this long (unless turned off). */
+    private const val SELECTION_TTL_MS = 5 * 60 * 1000L
+    private const val HOUR_MS = 60 * 60 * 1000L
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun dayKey(id: Int) = "day_$id"
@@ -87,17 +97,47 @@ class ForecastWidget : AppWidgetProvider() {
       ids.forEach { render(context, manager, it) }
     }
 
+    private fun alarms(context: Context) = context.getSystemService(AlarmManager::class.java)
+
+    private fun tick(context: Context) = PendingIntent.getBroadcast(
+      context, -1, Intent(context, ForecastWidget::class.java).setAction(ACTION_TICK),
+      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
+     * Sets the next redraw: the next hour at the location, or sooner when a picked
+     * day is due to go back to today. A non-wakeup alarm: with the screen off it
+     * waits until the phone wakes, which is when the widget can be seen anyway.
+     * Inexact (no special permission): Android may run it up to ~10 minutes late.
+     */
+    private fun scheduleTick(context: Context, forecast: Forecast?) {
+      if (forecast == null) return
+      val now = System.currentTimeMillis()
+      val offset = forecast.utcOffsetSeconds * 1000L
+      // +1 s so the redraw lands inside the new hour.
+      var next = ((now + offset) / HOUR_MS + 1) * HOUR_MS - offset + 1000
+      val show = Settings.load(context).show
+      if (show.dayPicker && show.returnToToday) {
+        val manager = AppWidgetManager.getInstance(context)
+        manager.getAppWidgetIds(ComponentName(context, ForecastWidget::class.java)).forEach { id ->
+          val expires = prefs(context).getLong(dayKey(id) + "_at", 0) + SELECTION_TTL_MS
+          if (expires > now) next = minOf(next, expires + 1000)
+        }
+      }
+      alarms(context).setWindow(AlarmManager.RTC, next, 60_000, tick(context))
+    }
+
     /**
      * The day shown by widget [id]: the one picked with the arrows if still in the
-     * forecast and picked in the last 30 minutes, else today. Without the arrows
-     * there is no way back, so always today.
+     * forecast and, with "return to today" on, picked in the last 5 minutes; else
+     * today. Without the arrows there is no way back, so always today.
      */
     private fun selectedDate(context: Context, id: Int, forecast: Forecast): String {
       val dates = forecast.days.map { it.date }
-      val arrows = Settings.load(context).show.dayPicker
+      val show = Settings.load(context).show
       val pickedAt = prefs(context).getLong(dayKey(id) + "_at", 0)
-      val recent = System.currentTimeMillis() - pickedAt < SELECTION_TTL_MS
-      val saved = if (arrows && recent) prefs(context).getString(dayKey(id), null) else null
+      val recent = !show.returnToToday || System.currentTimeMillis() - pickedAt < SELECTION_TTL_MS
+      val saved = if (show.dayPicker && recent) prefs(context).getString(dayKey(id), null) else null
       val today = forecast.nowKey().take(10)
       return when {
         saved != null && saved in dates && saved >= today -> saved
@@ -216,6 +256,7 @@ class ForecastWidget : AppWidgetProvider() {
       views.setImageViewBitmap(R.id.chart, ChartRenderer.render(chartW, chartH, density, hours, nowIndex, s))
       views.setViewVisibility(R.id.chart, View.VISIBLE)
       manager.updateAppWidget(id, views)
+      scheduleTick(context, forecast)
     }
 
     /** Phone makers' clock apps, tried in order (see <queries> in the manifest). */
