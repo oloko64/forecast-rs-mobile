@@ -5,6 +5,7 @@
   import { cubicInOut } from "svelte/easing";
   import type { TransitionConfig } from "svelte/transition";
   import Icon from "./Icon.svelte";
+  import { getVersion } from "@tauri-apps/api/app";
   import { COLOR_ROLES, PALETTES, paletteColors, type ColorRole } from "$lib/theme";
   import { LANGUAGES, t } from "$lib/i18n.svelte";
   import {
@@ -66,7 +67,14 @@
     { id: "small", name: t("clockSmall") },
     { id: "big", name: t("clockBig") },
   ]);
+  const RETURN_AFTER = [30, 60, 120, 300, 600, 1200].map((s) => ({ id: s, name: s < 60 ? `${s}s` : `${s / 60}m` }));
   const BACKGROUNDS = [100, 75, 50, 25, 0].map((p) => ({ id: p, name: `${p}%` }));
+
+  /** The installed app's version, from tauri.conf.json. */
+  let version = $state("");
+  getVersion()
+    .then((v) => (version = v))
+    .catch(() => {});
 
   // The sheet opens on a list of sections; each one is its own page.
   type Page = "appearance" | "forecast" | "updates" | "widget";
@@ -190,6 +198,7 @@
               </button>
             {/each}
           </div>
+          {#if version}<p class="version">{t("version", { value: version })}</p>{/if}
         {:else if page === "appearance"}
           <h3>{t("language")}</h3>
           {@render segmented(LANGS, config.language, (id) => onchange({ language: id as Language }))}
@@ -304,7 +313,14 @@
                 <span class="switch" class:on={config.widget.return_to_today}><i></i></span>
               </button>
             </div>
-            <p class="hint">{t("widgetReturnToTodayHint")}</p>
+            {#if config.widget.return_to_today}
+              <div class="return-after">
+                {@render segmented(RETURN_AFTER, config.widget.return_after_seconds, (id) =>
+                  setWidget({ return_after_seconds: id as number }),
+                )}
+              </div>
+              <p class="hint">{t("widgetReturnToTodayHint")}</p>
+            {/if}
           {/if}
           <p class="hint">{t("widgetHowTo")}</p>
         {/if}
@@ -365,6 +381,12 @@
     gap: 8px;
     padding-top: 4px;
   }
+  .version {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin: 20px 0 4px;
+  }
   .section {
     display: flex;
     align-items: center;
@@ -421,6 +443,9 @@
   }
   .toggles + .toggles {
     margin-top: 12px;
+  }
+  .return-after {
+    margin-top: 8px;
   }
   .toggle-row {
     display: flex;

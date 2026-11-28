@@ -50,8 +50,8 @@ class RefreshWorker(context: Context, params: WorkerParameters) : Worker(context
       "latitude" to lat.toString(),
       "longitude" to lon.toString(),
       "timezone" to timezone,
-      "daily" to "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum",
-      "hourly" to "temperature_2m,weathercode,precipitation,precipitation_probability",
+      "daily" to "temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum",
+      "hourly" to "temperature_2m,weather_code,precipitation,precipitation_probability",
       "forecast_days" to days.coerceIn(1, 16).toString(),
     ).joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, "UTF-8")}" }
     val connection = URL("https://api.open-meteo.com/v1/forecast?$query").openConnection() as HttpURLConnection
@@ -80,7 +80,7 @@ class RefreshWorker(context: Context, params: WorkerParameters) : Worker(context
           .put("time", times.getString(i) + ":00")
           .put("temperature", h.getJSONArray("temperature_2m").getDouble(i))
           .put("precipitation", h.getJSONArray("precipitation").optDouble(i, 0.0))
-          .put("weather", weather(h.getJSONArray("weathercode").optInt(i, -1))),
+          .put("weather", weather(h.getJSONArray("weather_code").optInt(i, -1))),
       )
     }
     val d = api.getJSONObject("daily")
@@ -93,7 +93,7 @@ class RefreshWorker(context: Context, params: WorkerParameters) : Worker(context
           .put("temperature_max", d.getJSONArray("temperature_2m_max").getDouble(i))
           .put("temperature_min", d.getJSONArray("temperature_2m_min").getDouble(i))
           .put("precipitation", d.getJSONArray("precipitation_sum").optDouble(i, 0.0))
-          .put("weather", weather(d.getJSONArray("weathercode").optInt(i, -1))),
+          .put("weather", weather(d.getJSONArray("weather_code").optInt(i, -1))),
       )
     }
     val forecast = JSONObject()

@@ -26,11 +26,11 @@ pub(crate) async fn fetch_forecast(
             ("timezone", location.timezone.clone()),
             (
                 "daily",
-                "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum".to_string(),
+                "temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum".to_string(),
             ),
             (
                 "hourly",
-                "temperature_2m,weathercode,precipitation,precipitation_probability".to_string(),
+                "temperature_2m,weather_code,precipitation,precipitation_probability".to_string(),
             ),
             (
                 "forecast_days",
@@ -58,7 +58,7 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
             [
                 daily.temperature_2m_max.len(),
                 daily.temperature_2m_min.len(),
-                daily.weathercode.len(),
+                daily.weather_code.len(),
                 daily.precipitation_sum.len()
             ]
             .iter()
@@ -68,7 +68,7 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
         ensure!(
             [
                 hourly.temperature_2m.len(),
-                hourly.weathercode.len(),
+                hourly.weather_code.len(),
                 hourly.precipitation.len()
             ]
             .iter()
@@ -85,7 +85,7 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
             .iter()
             .zip(daily.temperature_2m_max)
             .zip(daily.temperature_2m_min)
-            .zip(daily.weathercode)
+            .zip(daily.weather_code)
             .zip(daily.precipitation_sum)
             .map(
                 |((((date, temperature_max), temperature_min), code), precipitation)| {
@@ -105,7 +105,7 @@ impl TryFrom<OpenMeteoResponse> for ForecastResponse {
             .time
             .iter()
             .zip(hourly.temperature_2m)
-            .zip(hourly.weathercode)
+            .zip(hourly.weather_code)
             .zip(hourly.precipitation)
             .zip(hourly.precipitation_probability)
             .map(
@@ -142,21 +142,31 @@ pub(crate) fn decode_weather(code: u32) -> Weather {
         1 => ("Mainly clear", "🌤️", Clear),
         2 => ("Partly cloudy", "⛅", Cloudy),
         3 => ("Overcast", "☁️", Cloudy),
-        45 | 48 => ("Fog", "🌫️", Fog),
-        51 | 53 | 55 => ("Drizzle", "🌦️", Rain),
-        56 | 57 => ("Freezing drizzle", "🥶", Rain),
+        45 => ("Fog", "🌫️", Fog),
+        48 => ("Depositing rime fog", "🌫️", Fog),
+        51 => ("Light drizzle", "🌦️", Rain),
+        53 => ("Moderate drizzle", "🌦️", Rain),
+        55 => ("Dense drizzle", "🌦️", Rain),
+        56 => ("Light freezing drizzle", "🥶", Rain),
+        57 => ("Dense freezing drizzle", "🥶", Rain),
         61 => ("Slight rain", "🌧️", Rain),
         63 => ("Moderate rain", "🌧️", Rain),
         65 => ("Heavy rain", "🌧️", Rain),
-        66 | 67 => ("Freezing rain", "🧊", Rain),
+        66 => ("Light freezing rain", "🧊", Rain),
+        67 => ("Heavy freezing rain", "🧊", Rain),
         71 => ("Slight snow fall", "🌨️", Snow),
         73 => ("Moderate snow fall", "🌨️", Snow),
         75 => ("Heavy snow fall", "❄️", Snow),
         77 => ("Snow grains", "🌨️", Snow),
-        80..=82 => ("Rain showers", "🌦️", Rain),
-        85 | 86 => ("Snow showers", "🌨️", Snow),
+        80 => ("Slight rain showers", "🌦️", Rain),
+        81 => ("Moderate rain showers", "🌦️", Rain),
+        82 => ("Violent rain showers", "🌧️", Rain),
+        85 => ("Slight snow showers", "🌨️", Snow),
+        86 => ("Heavy snow showers", "❄️", Snow),
         95 => ("Thunderstorm", "⛈️", Storm),
-        96 | 99 => ("Thunderstorm with hail", "⛈️", Storm),
+        96 => ("Thunderstorm with slight hail", "⛈️", Storm),
+        97 => ("Heavy thunderstorm", "⛈️", Storm),
+        99 => ("Thunderstorm with heavy hail", "⛈️", Storm),
         _ => ("Unknown", "❔", Unknown),
     };
 
@@ -180,7 +190,7 @@ struct OpenMeteoResponse {
 struct HourlyData {
     time: Vec<String>,
     temperature_2m: Vec<f64>,
-    weathercode: Vec<u32>,
+    weather_code: Vec<u32>,
     precipitation: Vec<f64>,
     #[serde(default)]
     precipitation_probability: Vec<Option<f64>>,
@@ -191,7 +201,7 @@ struct DailyData {
     time: Vec<String>,
     temperature_2m_max: Vec<f64>,
     temperature_2m_min: Vec<f64>,
-    weathercode: Vec<u32>,
+    weather_code: Vec<u32>,
     precipitation_sum: Vec<f64>,
 }
 
@@ -209,13 +219,13 @@ mod tests {
             "time": ["2026-11-11"],
             "temperature_2m_max": [27.3],
             "temperature_2m_min": [17.1],
-            "weathercode": [2],
+            "weather_code": [2],
             "precipitation_sum": [1.5]
         },
         "hourly": {
             "time": ["2026-11-11T00:00", "2026-11-11T01:00"],
             "temperature_2m": [18.2, 17.9],
-            "weathercode": [0, 1234],
+            "weather_code": [0, 1234],
             "precipitation": [0.0, 0.4],
             "precipitation_probability": [5, null]
         }
@@ -298,7 +308,7 @@ mod tests {
         assert!(err.to_string().contains("hourly"));
 
         let mut response = fixture();
-        response.daily.weathercode.push(0);
+        response.daily.weather_code.push(0);
         let err = ForecastResponse::try_from(response).unwrap_err();
         assert!(err.to_string().contains("daily"));
     }
@@ -315,7 +325,7 @@ mod tests {
     fn every_documented_wmo_code_is_known() {
         let documented = [
             0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82,
-            85, 86, 95, 96, 99,
+            85, 86, 95, 96, 97, 99,
         ];
         for code in documented {
             assert_ne!(
@@ -325,5 +335,35 @@ mod tests {
             );
         }
         assert_eq!(decode_weather(4).kind, WeatherKind::Unknown);
+    }
+
+    /// The app translates descriptions (i18n.svelte.ts) and the widget has its own
+    /// decoder and translations (WidgetData.kt): both must know every description.
+    #[test]
+    fn every_description_is_translated_and_known_to_the_widget() {
+        let i18n = include_str!("../../src/lib/i18n.svelte.ts");
+        let widget = include_str!(
+            "../gen/android/app/src/main/java/com/oloko/forecast/widget/WidgetData.kt"
+        );
+        for code in 0..=99 {
+            let d = decode_weather(code).description;
+            if d == "Unknown" {
+                continue;
+            }
+            assert!(
+                i18n.contains(&format!("\"{d}\": ")) || i18n.contains(&format!("  {d}: ")),
+                "{d} missing from i18n.svelte.ts"
+            );
+            // Once in Wmo.decode (code -> description) and once in WEATHER_PT.
+            assert!(
+                widget.contains(&format!("{code} -> \"{d}\" to ")),
+                "{code} {d} missing from the widget's Wmo.decode"
+            );
+            assert!(
+                widget.contains(&format!("\"{d}\" to \""))
+                    && widget.matches(&format!("\"{d}\" to \"")).count() >= 2,
+                "{d} missing from the widget's WEATHER_PT"
+            );
+        }
     }
 }

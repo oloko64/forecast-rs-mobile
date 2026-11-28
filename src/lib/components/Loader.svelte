@@ -13,7 +13,7 @@
     { description: "Moderate rain", icon: "", kind: "rain" },
     { description: "Thunderstorm", icon: "", kind: "storm" },
     { description: "Slight snow fall", icon: "", kind: "snow" },
-    { description: "Rain showers", icon: "", kind: "rain" },
+    { description: "Moderate rain showers", icon: "", kind: "rain" },
   ];
   const MESSAGES: Key[] = ["loaderSky", "loaderClouds", "loaderStations", "loaderAlmost"];
 
