@@ -60,6 +60,7 @@
       summary: false,
       day_picker: true,
       return_to_today: true,
+      return_after_seconds: 120,
       refresh_button: true,
       rain: true,
       clock: "big",

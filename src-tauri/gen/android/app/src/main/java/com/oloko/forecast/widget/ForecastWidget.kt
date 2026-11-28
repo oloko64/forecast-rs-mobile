@@ -11,15 +11,22 @@ import android.os.Bundle
 import android.provider.AlarmClock
 import android.view.View
 import android.widget.RemoteViews
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
 import com.oloko.forecast.MainActivity
 import com.oloko.forecast.R
+import java.util.concurrent.TimeUnit
 
 /**
  * Home-screen widget: today's (or a chosen day's) temperature and rain chart,
  * the current conditions, and ◀ day ▶ to browse the forecast. Data comes from
  * widget.json, written by the app after each fetch and by [RefreshWorker].
- * Between fetches, an alarm redraws it when the hour turns (and when a picked
- * day should go back to today), so the chart's "now" follows the clock.
+ * Between fetches, an alarm redraws it when the hour turns, so the chart's
+ * "now" follows the clock, and [ReturnToTodayWorker] brings a picked day back
+ * to today.
  */
 class ForecastWidget : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -36,6 +43,7 @@ class ForecastWidget : AppWidgetProvider() {
   override fun onDisabled(context: Context) {
     RefreshWorker.cancel(context)
     alarms(context).cancel(tick(context))
+    WorkManager.getInstance(context).cancelUniqueWork(RETURN_WORK)
   }
 
   override fun onDeleted(context: Context, ids: IntArray) {
@@ -57,6 +65,7 @@ class ForecastWidget : AppWidgetProvider() {
           .putLong(dayKey(id) + "_at", System.currentTimeMillis())
           .apply()
         render(context, AppWidgetManager.getInstance(context), id)
+        scheduleReturnToToday(context)
       }
       // Only redraws from the saved forecast: no network.
       ACTION_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> updateAll(context)
@@ -76,8 +85,7 @@ class ForecastWidget : AppWidgetProvider() {
     private const val PREFS = "forecast_widget"
     const val KEY_REFRESHING = "refreshing"
     private const val KEY_SCHEDULED_MINUTES = "scheduled_minutes"
-    /** A day picked with the arrows returns to today after this long (unless turned off). */
-    private const val SELECTION_TTL_MS = 5 * 60 * 1000L
+    private const val RETURN_WORK = "forecast-widget-return-to-today"
     private const val HOUR_MS = 60 * 60 * 1000L
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -105,38 +113,44 @@ class ForecastWidget : AppWidgetProvider() {
     )
 
     /**
-     * Sets the next redraw: the next hour at the location, or sooner when a picked
-     * day is due to go back to today. A non-wakeup alarm: with the screen off it
-     * waits until the phone wakes, which is when the widget can be seen anyway.
-     * Inexact (no special permission): Android may run it up to ~10 minutes late.
+     * Sets the next redraw for when the hour turns at the location. A non-wakeup
+     * alarm: with the screen off it waits until the phone wakes, which is when the
+     * widget can be seen anyway. Inexact (no special permission): Android may run
+     * it up to ~10 minutes late.
      */
     private fun scheduleTick(context: Context, forecast: Forecast?) {
       if (forecast == null) return
       val now = System.currentTimeMillis()
       val offset = forecast.utcOffsetSeconds * 1000L
       // +1 s so the redraw lands inside the new hour.
-      var next = ((now + offset) / HOUR_MS + 1) * HOUR_MS - offset + 1000
-      val show = Settings.load(context).show
-      if (show.dayPicker && show.returnToToday) {
-        val manager = AppWidgetManager.getInstance(context)
-        manager.getAppWidgetIds(ComponentName(context, ForecastWidget::class.java)).forEach { id ->
-          val expires = prefs(context).getLong(dayKey(id) + "_at", 0) + SELECTION_TTL_MS
-          if (expires > now) next = minOf(next, expires + 1000)
-        }
-      }
+      val next = ((now + offset) / HOUR_MS + 1) * HOUR_MS - offset + 1000
       alarms(context).setWindow(AlarmManager.RTC, next, 60_000, tick(context))
     }
 
     /**
+     * Redraws once the day just picked is due to go back to today. A one-off job
+     * rather than an alarm: inexact alarms can run 10 minutes late, too coarse for
+     * a 30 s to 20 min timer, while a job runs on time while the phone is in use.
+     */
+    private fun scheduleReturnToToday(context: Context) {
+      val show = Settings.load(context).show
+      if (!show.dayPicker || !show.returnToToday) return
+      val request = OneTimeWorkRequestBuilder<ReturnToTodayWorker>()
+        .setInitialDelay(show.returnAfterSeconds + 1L, TimeUnit.SECONDS)
+        .build()
+      WorkManager.getInstance(context).enqueueUniqueWork(RETURN_WORK, ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
      * The day shown by widget [id]: the one picked with the arrows if still in the
-     * forecast and, with "return to today" on, picked in the last 5 minutes; else
-     * today. Without the arrows there is no way back, so always today.
+     * forecast and, with "return to today" on, picked less than the set time ago;
+     * else today. Without the arrows there is no way back, so always today.
      */
     private fun selectedDate(context: Context, id: Int, forecast: Forecast): String {
       val dates = forecast.days.map { it.date }
       val show = Settings.load(context).show
       val pickedAt = prefs(context).getLong(dayKey(id) + "_at", 0)
-      val recent = !show.returnToToday || System.currentTimeMillis() - pickedAt < SELECTION_TTL_MS
+      val recent = !show.returnToToday || System.currentTimeMillis() - pickedAt < show.returnAfterSeconds * 1000L
       val saved = if (show.dayPicker && recent) prefs(context).getString(dayKey(id), null) else null
       val today = forecast.nowKey().take(10)
       return when {
@@ -291,5 +305,13 @@ class ForecastWidget : AppWidgetProvider() {
       val code = id * 4 + listOf(ACTION_PREV, ACTION_NEXT, ACTION_REFRESH).indexOf(action)
       return PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
+  }
+}
+
+/** Redraws the widgets from the saved forecast, so a picked day goes back to today. */
+class ReturnToTodayWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
+  override fun doWork(): Result {
+    ForecastWidget.updateAll(applicationContext)
+    return Result.success()
   }
 }

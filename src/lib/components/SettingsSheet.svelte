@@ -67,6 +67,7 @@
     { id: "small", name: t("clockSmall") },
     { id: "big", name: t("clockBig") },
   ]);
+  const RETURN_AFTER = [30, 60, 120, 300, 600, 1200].map((s) => ({ id: s, name: s < 60 ? `${s}s` : `${s / 60}m` }));
   const BACKGROUNDS = [100, 75, 50, 25, 0].map((p) => ({ id: p, name: `${p}%` }));
 
   /** The installed app's version, from tauri.conf.json. */
@@ -312,7 +313,14 @@
                 <span class="switch" class:on={config.widget.return_to_today}><i></i></span>
               </button>
             </div>
-            <p class="hint">{t("widgetReturnToTodayHint")}</p>
+            {#if config.widget.return_to_today}
+              <div class="return-after">
+                {@render segmented(RETURN_AFTER, config.widget.return_after_seconds, (id) =>
+                  setWidget({ return_after_seconds: id as number }),
+                )}
+              </div>
+              <p class="hint">{t("widgetReturnToTodayHint")}</p>
+            {/if}
           {/if}
           <p class="hint">{t("widgetHowTo")}</p>
         {/if}
@@ -435,6 +443,9 @@
   }
   .toggles + .toggles {
     margin-top: 12px;
+  }
+  .return-after {
+    margin-top: 8px;
   }
   .toggle-row {
     display: flex;

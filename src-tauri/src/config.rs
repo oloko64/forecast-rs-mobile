@@ -23,6 +23,10 @@ const RESUME_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 15..=120;
 /// work at most every 15 minutes.
 const DEFAULT_WIDGET_REFRESH_MINUTES: u32 = 30;
 const WIDGET_REFRESH_MINUTES_RANGE: std::ops::RangeInclusive<u32> = 15..=240;
+/// A day picked with the widget's arrows goes back to today after this long
+/// (30 s to 20 min), when `return_to_today` is on.
+const DEFAULT_WIDGET_RETURN_SECONDS: u32 = 120;
+const WIDGET_RETURN_SECONDS_RANGE: std::ops::RangeInclusive<u32> = 30..=1200;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Config {
@@ -73,8 +77,9 @@ pub(crate) struct WidgetOptions {
     pub now: bool,
     pub summary: bool,
     pub day_picker: bool,
-    /// A day picked with the arrows goes back to today after a few minutes.
+    /// A day picked with the arrows goes back to today after `return_after_seconds`.
     pub return_to_today: bool,
+    pub return_after_seconds: u32,
     pub refresh_button: bool,
     pub rain: bool,
     pub clock: ClockStyle,
@@ -90,6 +95,7 @@ impl Default for WidgetOptions {
             summary: false,
             day_picker: true,
             return_to_today: true,
+            return_after_seconds: DEFAULT_WIDGET_RETURN_SECONDS,
             refresh_button: true,
             rain: true,
             clock: ClockStyle::Big,
@@ -118,8 +124,8 @@ fn default_resume_minutes() -> u32 {
     DEFAULT_RESUME_MINUTES
 }
 
-fn clamp_to(minutes: u32, range: &std::ops::RangeInclusive<u32>) -> u32 {
-    minutes.clamp(*range.start(), *range.end())
+fn clamp_to(value: u32, range: &std::ops::RangeInclusive<u32>) -> u32 {
+    value.clamp(*range.start(), *range.end())
 }
 
 /// Interface language; `System` follows the phone.
@@ -252,6 +258,10 @@ impl Config {
         config.resume_minutes = clamp_to(config.resume_minutes, &RESUME_MINUTES_RANGE);
         config.widget_refresh_minutes =
             clamp_to(config.widget_refresh_minutes, &WIDGET_REFRESH_MINUTES_RANGE);
+        config.widget.return_after_seconds = clamp_to(
+            config.widget.return_after_seconds,
+            &WIDGET_RETURN_SECONDS_RANGE,
+        );
         Ok(config)
     }
 
@@ -294,6 +304,8 @@ impl Config {
         }
         if let Some(mut widget) = patch.widget {
             widget.background = widget.background.min(100);
+            widget.return_after_seconds =
+                clamp_to(widget.return_after_seconds, &WIDGET_RETURN_SECONDS_RANGE);
             self.widget = widget;
         }
         if let Some(minutes) = patch.resume_minutes {
@@ -395,6 +407,7 @@ mod tests {
             widget: WidgetOptions {
                 rain: false,
                 return_to_today: false,
+                return_after_seconds: 600,
                 clock: ClockStyle::Big,
                 background: 25,
                 ..WidgetOptions::default()
@@ -493,6 +506,7 @@ mod tests {
             config.widget.return_to_today,
             "new options take their default"
         );
+        assert_eq!(config.widget.return_after_seconds, 120);
 
         // Turned back on after the migration: stays on.
         config.widget.location = true;
@@ -509,6 +523,21 @@ mod tests {
         config.apply(patch);
         assert_eq!(config.language, Language::PtBr);
         assert_eq!(serde_json::to_value(config.language).unwrap(), "pt-BR");
+    }
+
+    #[test]
+    fn widget_return_time_is_clamped() {
+        let mut config = Config::default();
+        for (asked, kept) in [(0, 30), (30, 30), (120, 120), (1200, 1200), (5000, 1200)] {
+            config.apply(SettingsPatch {
+                widget: Some(WidgetOptions {
+                    return_after_seconds: asked,
+                    ..WidgetOptions::default()
+                }),
+                ..SettingsPatch::default()
+            });
+            assert_eq!(config.widget.return_after_seconds, kept);
+        }
     }
 
     #[test]

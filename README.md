@@ -33,7 +33,7 @@ No accounts, no API keys, no trackers. Just the forecast.
 
 ### 📱 Home-screen widget
 
-- **The chart on your home screen,** with **‹ day ›** arrows to browse the forecast, the current temperature, and the day's high, low and rain. A picked day goes back to today after 5 minutes (can be turned off).
+- **The chart on your home screen,** with **‹ day ›** arrows to browse the forecast, the current temperature, and the day's high, low and rain. A picked day goes back to today after 2 minutes (30 s to 20 min, or never).
 - **"Now" follows the clock:** the widget redraws when the hour turns, without waiting for the next fetch; so does the app's chart when it's on the current hour.
 - **Stays fresh on its own:** the app shares every forecast it loads, and the widget also refreshes in the background (every 15 min to 4 h, 30 min by default).
 - **A clock built in:** big (time and date, the default), small (next to the temperature) or off. Tap it to open your clock app.
