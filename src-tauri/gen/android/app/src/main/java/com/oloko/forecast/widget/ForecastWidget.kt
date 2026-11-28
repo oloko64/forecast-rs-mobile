@@ -7,6 +7,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.view.View
@@ -105,6 +107,13 @@ class ForecastWidget : AppWidgetProvider() {
       ids.forEach { render(context, manager, it) }
     }
 
+    /** Same test as the refresh job's CONNECTED constraint: a network with internet. */
+    private fun online(context: Context): Boolean {
+      val manager = context.getSystemService(ConnectivityManager::class.java) ?: return true
+      val caps = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+      return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     private fun alarms(context: Context) = context.getSystemService(AlarmManager::class.java)
 
     private fun tick(context: Context) = PendingIntent.getBroadcast(
@@ -193,7 +202,9 @@ class ForecastWidget : AppWidgetProvider() {
       views.setOnClickPendingIntent(R.id.prev, action(context, ACTION_PREV, id))
       views.setOnClickPendingIntent(R.id.next, action(context, ACTION_NEXT, id))
       views.setOnClickPendingIntent(R.id.refresh, action(context, ACTION_REFRESH, id))
-      val refreshing = prefs(context).getBoolean(KEY_REFRESHING, false)
+      // Offline, the refresh job waits for a connection, so "…" would stay up
+      // until then; it shows again once the job is running.
+      val refreshing = prefs(context).getBoolean(KEY_REFRESHING, false) && online(context)
       views.setTextViewText(R.id.refresh, if (refreshing) "…" else "↻")
 
       if (forecast == null || forecast.days.isEmpty()) {
