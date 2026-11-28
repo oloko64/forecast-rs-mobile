@@ -163,11 +163,18 @@ data class Settings(
     private val WEATHER_PT = mapOf(
       "Clear sky" to "Céu limpo", "Mainly clear" to "Predominantemente limpo",
       "Partly cloudy" to "Parcialmente nublado", "Overcast" to "Nublado", "Fog" to "Neblina",
-      "Drizzle" to "Garoa", "Freezing drizzle" to "Garoa congelante", "Slight rain" to "Chuva fraca",
-      "Moderate rain" to "Chuva moderada", "Heavy rain" to "Chuva forte", "Freezing rain" to "Chuva congelante",
+      "Depositing rime fog" to "Neblina com geada", "Light drizzle" to "Garoa fraca",
+      "Moderate drizzle" to "Garoa moderada", "Dense drizzle" to "Garoa densa",
+      "Light freezing drizzle" to "Garoa congelante fraca", "Dense freezing drizzle" to "Garoa congelante densa",
+      "Slight rain" to "Chuva fraca", "Moderate rain" to "Chuva moderada", "Heavy rain" to "Chuva forte",
+      "Light freezing rain" to "Chuva congelante fraca", "Heavy freezing rain" to "Chuva congelante forte",
       "Slight snow fall" to "Neve fraca", "Moderate snow fall" to "Neve moderada", "Heavy snow fall" to "Neve forte",
-      "Snow grains" to "Grãos de neve", "Rain showers" to "Pancadas de chuva", "Snow showers" to "Pancadas de neve",
-      "Thunderstorm" to "Tempestade", "Thunderstorm with hail" to "Tempestade com granizo", "Unknown" to "Desconhecido",
+      "Snow grains" to "Grãos de neve", "Slight rain showers" to "Pancadas de chuva fracas",
+      "Moderate rain showers" to "Pancadas de chuva moderadas",
+      "Violent rain showers" to "Pancadas de chuva violentas", "Slight snow showers" to "Pancadas de neve fracas",
+      "Heavy snow showers" to "Pancadas de neve fortes", "Thunderstorm" to "Tempestade",
+      "Thunderstorm with slight hail" to "Tempestade com granizo fraco", "Heavy thunderstorm" to "Tempestade forte",
+      "Thunderstorm with heavy hail" to "Tempestade com granizo forte", "Unknown" to "Desconhecido",
     )
   }
 }
@@ -230,21 +237,31 @@ object Wmo {
     1 -> "Mainly clear" to "🌤️"
     2 -> "Partly cloudy" to "⛅"
     3 -> "Overcast" to "☁️"
-    45, 48 -> "Fog" to "🌫️"
-    51, 53, 55 -> "Drizzle" to "🌦️"
-    56, 57 -> "Freezing drizzle" to "🥶"
+    45 -> "Fog" to "🌫️"
+    48 -> "Depositing rime fog" to "🌫️"
+    51 -> "Light drizzle" to "🌦️"
+    53 -> "Moderate drizzle" to "🌦️"
+    55 -> "Dense drizzle" to "🌦️"
+    56 -> "Light freezing drizzle" to "🥶"
+    57 -> "Dense freezing drizzle" to "🥶"
     61 -> "Slight rain" to "🌧️"
     63 -> "Moderate rain" to "🌧️"
     65 -> "Heavy rain" to "🌧️"
-    66, 67 -> "Freezing rain" to "🧊"
+    66 -> "Light freezing rain" to "🧊"
+    67 -> "Heavy freezing rain" to "🧊"
     71 -> "Slight snow fall" to "🌨️"
     73 -> "Moderate snow fall" to "🌨️"
     75 -> "Heavy snow fall" to "❄️"
     77 -> "Snow grains" to "🌨️"
-    80, 81, 82 -> "Rain showers" to "🌦️"
-    85, 86 -> "Snow showers" to "🌨️"
+    80 -> "Slight rain showers" to "🌦️"
+    81 -> "Moderate rain showers" to "🌦️"
+    82 -> "Violent rain showers" to "🌧️"
+    85 -> "Slight snow showers" to "🌨️"
+    86 -> "Heavy snow showers" to "❄️"
     95 -> "Thunderstorm" to "⛈️"
-    96, 99 -> "Thunderstorm with hail" to "⛈️"
+    96 -> "Thunderstorm with slight hail" to "⛈️"
+    97 -> "Heavy thunderstorm" to "⛈️"
+    99 -> "Thunderstorm with heavy hail" to "⛈️"
     else -> "Unknown" to "❔"
   }
 }

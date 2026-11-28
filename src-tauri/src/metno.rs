@@ -144,7 +144,7 @@ fn convert(
 fn symbol_to_wmo(symbol: &str) -> u32 {
     let base = symbol.split('_').next().unwrap_or(symbol);
     if base.contains("thunder") {
-        return 95;
+        return if base.starts_with("heavy") { 97 } else { 95 };
     }
     match base {
         "clearsky" => 0,
@@ -177,20 +177,30 @@ fn wmo_rank(description: &str) -> u32 {
         "Partly cloudy",
         "Overcast",
         "Fog",
-        "Drizzle",
+        "Depositing rime fog",
+        "Light drizzle",
+        "Moderate drizzle",
+        "Dense drizzle",
         "Slight rain",
-        "Rain showers",
+        "Slight rain showers",
         "Moderate rain",
+        "Moderate rain showers",
         "Snow grains",
         "Slight snow fall",
-        "Snow showers",
+        "Slight snow showers",
         "Moderate snow fall",
-        "Freezing drizzle",
-        "Freezing rain",
+        "Light freezing drizzle",
+        "Dense freezing drizzle",
+        "Light freezing rain",
         "Heavy rain",
+        "Violent rain showers",
+        "Heavy freezing rain",
         "Heavy snow fall",
+        "Heavy snow showers",
         "Thunderstorm",
-        "Thunderstorm with hail",
+        "Heavy thunderstorm",
+        "Thunderstorm with slight hail",
+        "Thunderstorm with heavy hail",
     ]
     .iter()
     .position(|d| *d == description)
@@ -360,7 +370,8 @@ mod tests {
     fn maps_symbol_codes() {
         assert_eq!(symbol_to_wmo("clearsky_night"), 0);
         assert_eq!(symbol_to_wmo("partlycloudy_polartwilight"), 2);
-        assert_eq!(symbol_to_wmo("heavyrainshowersandthunder_day"), 95);
+        assert_eq!(symbol_to_wmo("heavyrainshowersandthunder_day"), 97);
+        assert_eq!(symbol_to_wmo("lightrainandthunder"), 95);
         assert_eq!(symbol_to_wmo("lightsnowshowers_day"), 85);
         let known = [
             "clearsky",

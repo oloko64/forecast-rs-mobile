@@ -489,7 +489,10 @@ mod tests {
         assert!(!config.widget.location && !config.widget.summary);
         assert!(!config.widget.rain, "other choices are kept");
         assert_eq!(config.widget.clock, ClockStyle::Big);
-        assert!(config.widget.return_to_today, "new options take their default");
+        assert!(
+            config.widget.return_to_today,
+            "new options take their default"
+        );
 
         // Turned back on after the migration: stays on.
         config.widget.location = true;
